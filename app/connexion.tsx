@@ -9,21 +9,83 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import * as SecureStore from "expo-secure-store";
+import api from "./api/api";
+import { AxiosError } from 'axios'; 
 
-// Écran de Connexion
+
 export default function EcranConnexion() {
   const [email, setEmail] = useState("");
-  const [motDePasse, setMotDePasse] = useState("");
+  const [password, setPassword] = useState("");
   const [seSouvenir, setSeSouvenir] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = () => {
-    console.log("Tentative de connexion:", { email, motDePasse, seSouvenir });
-    // TODO: Implémenter la logique de connexion réelle (API call)
-    // Si la connexion réussit:
-    router.replace("/confirmation_succes"); // Utilise replace pour ne pas pouvoir revenir à la connexion
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validatePassword = (password: string) => {
+    return password.length >= 8 && password.length <= 32;
+  };
+
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert("Erreur", "Veuillez remplir tous les champs.");
+      return;
+    }
+
+    if (!validateEmail(email)) {
+      Alert.alert("Erreur", "Veuillez entrer un email valide.");
+      return;
+    }
+
+    if (!validatePassword(password)) {
+      Alert.alert("Erreur", "Le mot de passe doit contenir entre 8 et 32 caractères.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      console.log("Envoi de la requête à : /user/login");
+      const response = await api.post("/user/login", {
+        email,
+        password,
+      });
+    const { token } = response.data;
+      if (response.data.token) {
+        if (Platform.OS !== "web") {
+          await SecureStore.setItemAsync("authToken", response.data.token.token);
+        } else {
+          localStorage.setItem("authToken", response.data.token.token);
+        }
+         console.log("Données de la réponse :", response.data);
+          Alert.alert("Succès", response.data.message || "Connexion réussie !");
+
+
+        router.push("/accueil");
+      }
+    } catch (error) {
+      // console.error("Erreur de connexion avec l'API :", error);
+      
+      // let errorMessage = "Échec de la connexion. Veuillez réessayer.";
+      // if (error.response) {
+      //   errorMessage = error.response.data.message || Object.values(error.response.data.errors || {})
+      //     .flat()
+      //     .join("\n");
+      // } else if (error.request) {
+      //   errorMessage = "Impossible de se connecter au serveur. Vérifiez que le serveur est en cours d'exécution à http://192.168.1.144:3333.";
+      // } else {
+      //   errorMessage = error.message;
+      // }
+      // Alert.alert("Erreur", errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleGoogleLogin = () => {
@@ -37,9 +99,7 @@ export default function EcranConnexion() {
   };
 
   const handleMotDePasseOublie = () => {
-    // Naviguer vers l'écran de récupération
     router.push("/mot_de_passe_oublie");
-    // console.log("Mot de passe oublié");
   };
 
   return (
@@ -53,16 +113,14 @@ export default function EcranConnexion() {
           contentContainerStyle={styles.conteneurScroll}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Titres */}
           <Text style={styles.titrePrincipal}>Veuillez vous connecter</Text>
           <Text style={styles.sousTitreIntro}>
             Connectez-vous à votre compte
           </Text>
           <Text style={styles.description}>
-            entrez votre email pour vous connecter à l'application
+            Entrez votre email pour vous connecter à l'application
           </Text>
 
-          {/* Champs de saisie */}
           <TextInput
             style={styles.input}
             placeholder="email@domain.com"
@@ -73,27 +131,27 @@ export default function EcranConnexion() {
           />
           <TextInput
             style={styles.input}
-            placeholder="mot de passe"
-            value={motDePasse}
-            onChangeText={setMotDePasse}
+            placeholder="Mot de passe"
+            value={password}
+            onChangeText={setPassword}
             secureTextEntry
           />
 
-          {/* Bouton Continuer */}
           <TouchableOpacity
-            style={styles.boutonContinuer}
+            style={[styles.boutonContinuer, isLoading && styles.boutonDisabled]}
             onPress={handleLogin}
+            disabled={isLoading}
           >
-            <Text style={styles.texteBoutonContinuer}>Continuer</Text>
+            <Text style={styles.texteBoutonContinuer}>
+              {isLoading ? "Connexion..." : "Continuer"}
+            </Text>
           </TouchableOpacity>
 
-          {/* Options Se Souvenir / Mot de passe oublié */}
           <View style={styles.optionsLigne}>
             <TouchableOpacity
               style={styles.checkboxConteneur}
               onPress={() => setSeSouvenir(!seSouvenir)}
             >
-              {/* Placeholder simple pour la checkbox */}
               <View
                 style={[styles.checkbox, seSouvenir && styles.checkboxChecked]}
               >
@@ -106,19 +164,16 @@ export default function EcranConnexion() {
             </TouchableOpacity>
           </View>
 
-          {/* Séparateur "ou" */}
           <View style={styles.separateurConteneur}>
             <View style={styles.ligneSeparateur} />
             <Text style={styles.texteSeparateur}>ou</Text>
             <View style={styles.ligneSeparateur} />
           </View>
 
-          {/* Connexion Sociale */}
           <TouchableOpacity
             style={styles.boutonSocial}
             onPress={handleGoogleLogin}
           >
-            {/* Placeholder pour l'icône Google */}
             <Text style={styles.iconeSocial}>G</Text>
             <Text style={styles.texteBoutonSocial}>Continuer avec Google</Text>
           </TouchableOpacity>
@@ -126,12 +181,10 @@ export default function EcranConnexion() {
             style={styles.boutonSocial}
             onPress={handleAppleLogin}
           >
-            {/* Placeholder pour l'icône Apple */}
             <Text style={styles.iconeSocial}></Text>
             <Text style={styles.texteBoutonSocial}>Continuer avec Apple</Text>
           </TouchableOpacity>
 
-          {/* Conditions d'utilisation */}
           <Text style={styles.texteConditions}>
             En cliquant sur continuer, vous acceptez nos conditions
             d'utilisation et notre politique de confidentialité.
@@ -153,7 +206,7 @@ const styles = StyleSheet.create({
   conteneurScroll: {
     flexGrow: 1,
     paddingHorizontal: 25,
-    paddingBottom: 20, // Espace en bas
+    paddingBottom: 20,
     justifyContent: "center",
   },
   titrePrincipal: {
@@ -193,6 +246,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: "center",
     marginBottom: 20,
+  },
+  boutonDisabled: {
+    backgroundColor: "#00000080",
   },
   texteBoutonContinuer: {
     color: "#FFFFFF",
@@ -263,7 +319,6 @@ const styles = StyleSheet.create({
   iconeSocial: {
     fontSize: 18,
     marginRight: 10,
-    // Styles spécifiques pour chaque icône pourraient être ajoutés ici
   },
   texteBoutonSocial: {
     color: "#000000",
