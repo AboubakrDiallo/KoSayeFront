@@ -67,7 +67,7 @@ export default function EcranConnexion() {
           Alert.alert("Succès", response.data.message || "Connexion réussie !");
 
 
-        router.push("/accueil");
+        router.push("/(tabs)/accueil");
       }
     } catch (error) {
       // console.error("Erreur de connexion avec l'API :", error);

@@ -80,7 +80,7 @@ export default function EcranInscription() {
 
       console.log("Données de la réponse :", response.data);
       Alert.alert("Succès", response.data.message || "Inscription réussie ! Veuillez vous connecter.");
-      router.replace("/connexion");
+      router.replace("/(tabs)/accueil");
     } catch (error) {
       console.error("Erreur de connexion avec l'API :", error);
       let errorMessage = "Erreur lors de l'inscription.";
@@ -121,6 +121,7 @@ export default function EcranInscription() {
             value={firstname}
             onChangeText={setFirstname}
             autoCapitalize="words"
+            editable={!isLoading}
           />
           <TextInput
             style={styles.input}
@@ -128,6 +129,7 @@ export default function EcranInscription() {
             value={lastname}
             onChangeText={setLastname}
             autoCapitalize="words"
+            editable={!isLoading}
           />
           <TextInput
             style={styles.input}
@@ -157,6 +159,7 @@ export default function EcranInscription() {
             value={password}
             onChangeText={setPassword}
             secureTextEntry
+            editable={!isLoading}
           />
           <TextInput
             style={styles.input}
@@ -164,6 +167,7 @@ export default function EcranInscription() {
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             secureTextEntry
+            editable={!isLoading}
           />
 
           <TouchableOpacity

@@ -278,7 +278,7 @@ const ProductDetail = () => {
           <Animated.View style={{ transform: [{ scale: wishlistButtonScale }] }}>
             <TouchableOpacity
               style={[styles.actionButton, styles.wishlistButton]}
-              onPress={handleAddToWishlist}
+            
             >
               <Ionicons name="heart-outline" size={20} color="#FFF" style={styles.buttonIcon} />
               <Text style={styles.actionButtonText}>Ajouter aux favoris</Text>

@@ -10,6 +10,7 @@ import {
   Dimensions,
   ActivityIndicator,
   Platform,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -40,6 +41,13 @@ interface Product {
   category: { id: string; name: string };
   propertyValues: { property_id: string; value: string }[];
   variants: { id: string; name: string; price: number | string; stock: number; image?: string }[];
+}
+
+interface WishlistItem {
+  id: string; // ID de l'entrée dans wishlist_items
+  wishlist_id: string;
+  product_id: string;
+  product: Product;
 }
 
 // --- Données de secours ---
@@ -92,7 +100,9 @@ const Header = ({ userName }: { userName: string }) => (
     <View style={styles.headerIcons}>
       <TouchableOpacity
         style={styles.iconButton}
-        onPress={() => router.push("/recherche")}
+        onPress={() => {
+          Alert.alert("Info", "La fonctionnalité de recherche n'est pas encore disponible.");
+        }}
       >
         <Ionicons name="search" size={26} color="#333" />
       </TouchableOpacity>
@@ -139,7 +149,15 @@ const Banner = () => (
   </View>
 );
 
-const ProductCard = ({ item }: { item: Product }) => (
+const ProductCard = ({
+  item,
+  isFavorite,
+  toggleFavorite,
+}: {
+  item: Product;
+  isFavorite: boolean;
+  toggleFavorite: (productId: string) => void;
+}) => (
   <TouchableOpacity
     style={styles.cardContainer}
     onPress={() => {
@@ -157,15 +175,32 @@ const ProductCard = ({ item }: { item: Product }) => (
       style={styles.cardImage}
       resizeMode="cover"
     />
-    <TouchableOpacity style={styles.heartIconContainer}>
-      <Ionicons name="heart-outline" size={20} color="#555" />
+    <TouchableOpacity
+      style={styles.heartIconContainer}
+      onPress={() => toggleFavorite(item.id)}
+    >
+      <Ionicons
+        name={isFavorite ? "heart" : "heart-outline"}
+        size={20}
+        color={isFavorite ? "#FF0000" : "#555"}
+      />
     </TouchableOpacity>
     <Text style={styles.cardName}>{item.name}</Text>
     <Text style={styles.cardPrice}>${item.price}</Text>
   </TouchableOpacity>
 );
 
-const ProductSection = ({ title, data }: { title: string; data: Product[] }) => (
+const ProductSection = ({
+  title,
+  data,
+  favorites,
+  toggleFavorite,
+}: {
+  title: string;
+  data: Product[];
+  favorites: string[];
+  toggleFavorite: (productId: string) => void;
+}) => (
   <View style={styles.sectionContainer}>
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -178,7 +213,13 @@ const ProductSection = ({ title, data }: { title: string; data: Product[] }) => 
     ) : (
       <FlatList
         data={data}
-        renderItem={({ item }) => <ProductCard item={item} />}
+        renderItem={({ item }) => (
+          <ProductCard
+            item={item}
+            isFavorite={favorites.includes(item.id)}
+            toggleFavorite={toggleFavorite}
+          />
+        )}
         keyExtractor={(item) => item.id}
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -194,31 +235,126 @@ export default function EcranAccueil() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [popularProducts, setPopularProducts] = useState<Product[]>([]);
+  const [favorites, setFavorites] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { getToken } = useAuthToken();
 
+  const fetchFavorites = async (token: string) => {
+    try {
+      const response = await api.get("/wishlist", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      console.log("Réponse favoris :", JSON.stringify(response.data, null, 2));
+      const wishlistItems = response.data.data || [];
+      setFavorites(wishlistItems.map((item: WishlistItem) => item.product_id));
+    } catch (error: any) {
+      console.error("Erreur récupération favoris :", error);
+      console.log("Détails erreur:", JSON.stringify(error.response?.data, null, 2));
+      if (error.response?.status === 403 || error.response?.status === 401) {
+        Alert.alert(
+          "Erreur d'authentification",
+          "Session invalide. Veuillez vous reconnecter.",
+          [{ text: "OK", onPress: () => router.push("/connexion") }]
+        );
+        if (Platform.OS !== "web") {
+          await SecureStore.deleteItemAsync("authToken");
+        } else {
+          localStorage.removeItem("authToken");
+        }
+      }
+    }
+  };
+
+  const toggleFavorite = async (productId: string) => {
+    const token = await getToken();
+    if (!token) {
+      Alert.alert("Erreur", "Vous devez être connecté pour ajouter aux favoris.");
+      router.push("/connexion");
+      return;
+    }
+  
+    const isFavorite = favorites.includes(productId);
+    const previousFavorites = [...favorites];
+  
+    try {
+      console.log("Accueil.tsx - toggleFavorite - productId :", productId, "isFavorite :", isFavorite);
+      if (isFavorite) {
+        const response = await api.get("/wishlist", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        console.log("Accueil.tsx - Réponse GET /wishlist pour suppression :", JSON.stringify(response.data, null, 2));
+        const wishlistItem = response.data.data.find(
+          (item: WishlistItem) => item.product_id === productId
+        );
+        if (wishlistItem) {
+          console.log("Accueil.tsx - Suppression wishlistItemId :", wishlistItem.id);
+          await api.delete(`/wishlist/${wishlistItem.id}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          await fetchFavorites(token);
+          Alert.alert("Succès", "Produit retiré des favoris.");
+        } else {
+          throw new Error("Élément de la liste de souhaits non trouvé");
+        }
+      } else {
+        console.log("Accueil.tsx - Ajout productId :", productId);
+        await api.post(
+          "/wishlist",
+          { productId },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        await fetchFavorites(token);
+        Alert.alert("Succès", "Produit ajouté aux favoris.");
+      }
+      console.log("Accueil.tsx - Favorites après mise à jour :", favorites);
+    } catch (error: any) {
+      console.error("Accueil.tsx - Erreur modification favoris :", error);
+      console.log("Accueil.tsx - Détails erreur :", JSON.stringify(error.response?.data, null, 2));
+      let errorMessage = "Impossible de modifier les favoris. Veuillez réessayer.";
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      setFavorites(previousFavorites);
+      Alert.alert("Erreur", errorMessage);
+    }
+  };
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
       try {
         const token = await getToken();
-        console.log('Token utilisé:', token);
+        console.log("Token utilisé:", token);
 
         if (token) {
           try {
-            const userResponse = await api.get("/user");
+            const userResponse = await api.get("/user", {
+              headers: { Authorization: `Bearer ${token}` },
+            });
             console.log("Réponse utilisateur :", JSON.stringify(userResponse.data, null, 2));
             setUserName(`${userResponse.data.data.firstname} ${userResponse.data.data.lastname}`);
-          } catch (error) {
+            await fetchFavorites(token);
+          } catch (error: any) {
             console.error("Erreur récupération utilisateur :", error);
+            console.log("Détails erreur:", JSON.stringify(error.response?.data, null, 2));
             setUserName("Bienvenue !");
+            if (error.response?.status === 403 || error.response?.status === 401) {
+              Alert.alert(
+                "Erreur d'authentification",
+                "Session invalide ou permissions insuffisantes. Veuillez vous reconnecter.",
+                [{ text: "OK", onPress: () => router.push("/connexion") }]
+              );
+              if (Platform.OS !== "web") {
+                await SecureStore.deleteItemAsync("authToken");
+              } else {
+                localStorage.removeItem("authToken");
+              }
+            }
           }
         } else {
           console.log("Aucun token trouvé");
           setUserName("Bienvenue !");
         }
 
-        // Récupérer les catégories
         try {
           const categoriesResponse = await api.get("/categories");
           console.log("Réponse catégories :", JSON.stringify(categoriesResponse.data, null, 2));
@@ -230,7 +366,6 @@ export default function EcranAccueil() {
           setCategories(fallbackCategories);
         }
 
-        // Récupérer les produits en vedette
         try {
           const featuredResponse = await api.get("/products?page=1&limit=5");
           console.log("Réponse produits en vedette :", JSON.stringify(featuredResponse.data, null, 2));
@@ -242,7 +377,6 @@ export default function EcranAccueil() {
           setFeaturedProducts(fallbackProducts);
         }
 
-        // Récupérer les produits populaires
         try {
           const popularResponse = await api.get("/products?page=2&limit=5");
           console.log("Réponse produits populaires :", JSON.stringify(popularResponse.data, null, 2));
@@ -282,8 +416,18 @@ export default function EcranAccueil() {
           <Header userName={userName} />
           <CategoryList categories={categories} />
           <Banner />
-          <ProductSection title="En vedette" data={featuredProducts} />
-          <ProductSection title="Most Popular" data={popularProducts} />
+          <ProductSection
+            title="En vedette"
+            data={featuredProducts}
+            favorites={favorites}
+            toggleFavorite={toggleFavorite}
+          />
+          <ProductSection
+            title="Populaire"
+            data={popularProducts}
+            favorites={favorites}
+            toggleFavorite={toggleFavorite}
+          />
           <View style={{ height: 20 }} />
         </ScrollView>
       )}

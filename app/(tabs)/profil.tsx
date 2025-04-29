@@ -13,12 +13,37 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useProfile } from "../../contexts/ProfileContext";
+import * as ImagePicker from "expo-image-picker";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
 export default function ProfileScreen() {
   const router = useRouter();
   const [isImageModalVisible, setIsImageModalVisible] = useState(false);
+  const { profileImage, setProfileImage } = useProfile();
+
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (status !== "granted") {
+      alert(
+        "Désolé, nous avons besoin de la permission d'accéder à votre galerie pour changer la photo de profil."
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      setProfileImage(result.assets[0].uri);
+    }
+  };
 
   const menuItems = [
     {
@@ -89,15 +114,10 @@ export default function ProfileScreen() {
       <ScrollView style={styles.scrollView}>
         {/* Photo de profil et informations */}
         <View style={styles.profileSection}>
-          <TouchableOpacity onPress={toggleImageModal}>
-            <Image
-              source={{
-                uri: "https://images.unsplash.com/photo-1531384441138-2736e62e0919?q=80&w=200&h=200&auto=format&fit=crop",
-              }}
-              style={styles.profileImage}
-            />
+          <TouchableOpacity onPress={pickImage}>
+            <Image source={{ uri: profileImage }} style={styles.profileImage} />
             <View style={styles.imageOverlay}>
-              <Ionicons name="expand" size={24} color="#FFF" />
+              <Ionicons name="camera" size={24} color="#FFF" />
             </View>
           </TouchableOpacity>
           <Text style={styles.name}>Aboubacar Diallo</Text>
@@ -143,9 +163,7 @@ export default function ProfileScreen() {
             <Ionicons name="close" size={28} color="#FFF" />
           </TouchableOpacity>
           <Image
-            source={{
-              uri: "https://images.unsplash.com/photo-1531384441138-2736e62e0919?q=80&w=200&h=200&auto=format&fit=crop",
-            }}
+            source={{ uri: profileImage }}
             style={styles.fullScreenImage}
             resizeMode="contain"
           />
