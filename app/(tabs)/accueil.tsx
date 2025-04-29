@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   StyleSheet,
   View,
@@ -9,10 +9,13 @@ import {
   Image,
   FlatList,
   Dimensions,
+  Modal,
+  StatusBar,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useProfile } from "../../contexts/ProfileContext";
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = width * 0.4; // Largeur des cartes produit
@@ -123,23 +126,68 @@ const popularProducts = [
 // --- Composants UI ---
 
 // En-tête de l'écran
-const Header = () => (
-  <View style={styles.headerContainer}>
-    <View style={styles.headerLeft}>
-      <Image
-        source={{ uri: "https://via.placeholder.com/50/000000" }} // Placeholder image profil
-        style={styles.profileImage}
-      />
-      <View>
-        <Text style={styles.greetingText}>Coucou!</Text>
-        <Text style={styles.userName}>Aboubacar Diallo</Text>
+const Header = () => {
+  const { profileImage } = useProfile();
+  const [isImageModalVisible, setIsImageModalVisible] = useState(false);
+  const [isNotified, setIsNotified] = useState(false);
+
+  const toggleImageModal = () => {
+    setIsImageModalVisible(!isImageModalVisible);
+  };
+
+  const toggleNotification = () => {
+    setIsNotified(!isNotified);
+  };
+
+  return (
+    <>
+      <View style={styles.headerContainer}>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity onPress={toggleImageModal}>
+            <Image source={{ uri: profileImage }} style={styles.profileImage} />
+          </TouchableOpacity>
+          <View>
+            <Text style={styles.greetingText}>Coucou!</Text>
+            <Text style={styles.userName}>Aboubacar Diallo</Text>
+          </View>
+        </View>
+        <TouchableOpacity
+          style={styles.notificationButton}
+          onPress={toggleNotification}
+        >
+          <Ionicons
+            name={isNotified ? "notifications" : "notifications-outline"}
+            size={26}
+            color={isNotified ? "#F59E0B" : "#333"}
+          />
+        </TouchableOpacity>
       </View>
-    </View>
-    <TouchableOpacity style={styles.notificationButton}>
-      <Ionicons name="notifications-outline" size={26} color="#333" />
-    </TouchableOpacity>
-  </View>
-);
+
+      {/* Modal pour afficher l'image en plein écran */}
+      <Modal
+        visible={isImageModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={toggleImageModal}
+      >
+        <View style={styles.modalContainer}>
+          <StatusBar backgroundColor="#000000" barStyle="light-content" />
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={toggleImageModal}
+          >
+            <Ionicons name="close" size={28} color="#FFF" />
+          </TouchableOpacity>
+          <Image
+            source={{ uri: profileImage }}
+            style={styles.fullScreenImage}
+            resizeMode="contain"
+          />
+        </View>
+      </Modal>
+    </>
+  );
+};
 
 // Barre de recherche
 const SearchBar = () => (
@@ -183,36 +231,52 @@ interface ProductCardProps {
     availableSizes?: string[];
   };
 }
-const ProductCard = ({ item }: ProductCardProps) => (
-  <TouchableOpacity
-    style={styles.cardContainer}
-    onPress={() => {
-      router.push({
-        pathname: "/detail_produit",
-        params: {
-          id: item.id,
-          name: item.name,
-          price: item.price,
-          image: item.image,
-          description: item.description || "Description non disponible",
-          sizes: JSON.stringify(item.sizes || ["Unique"]),
-          availableSizes: JSON.stringify(item.availableSizes || ["Unique"]),
-        },
-      });
-    }}
-  >
-    <Image
-      source={{ uri: item.image }}
-      style={styles.cardImage}
-      resizeMode="cover"
-    />
-    <TouchableOpacity style={styles.heartIconContainer}>
-      <Ionicons name="heart-outline" size={20} color="#555" />
+
+const ProductCard = ({ item }: ProductCardProps) => {
+  const [isFavorite, setIsFavorite] = useState(false);
+
+  const toggleFavorite = () => {
+    setIsFavorite(!isFavorite);
+  };
+
+  return (
+    <TouchableOpacity
+      style={styles.cardContainer}
+      onPress={() => {
+        router.push({
+          pathname: "/detail_produit",
+          params: {
+            id: item.id,
+            name: item.name,
+            price: item.price,
+            image: item.image,
+            description: item.description || "Description non disponible",
+            sizes: JSON.stringify(item.sizes || ["Unique"]),
+            availableSizes: JSON.stringify(item.availableSizes || ["Unique"]),
+          },
+        });
+      }}
+    >
+      <Image
+        source={{ uri: item.image }}
+        style={styles.cardImage}
+        resizeMode="cover"
+      />
+      <TouchableOpacity
+        style={styles.heartIconContainer}
+        onPress={toggleFavorite}
+      >
+        <Ionicons
+          name={isFavorite ? "heart" : "heart-outline"}
+          size={20}
+          color={isFavorite ? "#FF0000" : "#555"}
+        />
+      </TouchableOpacity>
+      <Text style={styles.cardName}>{item.name}</Text>
+      <Text style={styles.cardPrice}>${item.price}</Text>
     </TouchableOpacity>
-    <Text style={styles.cardName}>{item.name}</Text>
-    <Text style={styles.cardPrice}>${item.price}</Text>
-  </TouchableOpacity>
-);
+  );
+};
 
 // Section de Produits (ex: En vedette)
 interface ProductSectionProps {
@@ -368,7 +432,7 @@ const styles = StyleSheet.create({
   },
   sectionSeeAll: {
     fontSize: 14,
-    color: "#6A1B9A", // Couleur du thème (violet exemple)
+    color: "#FB8C00", // Couleur du thème (orange exemple)
     fontWeight: "500",
   },
   productListContent: {
@@ -409,5 +473,25 @@ const styles = StyleSheet.create({
     color: "#666",
     marginBottom: 10,
     marginHorizontal: 10,
+  },
+  // Styles pour le modal
+  modalContainer: {
+    flex: 1,
+    backgroundColor: "#000",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  fullScreenImage: {
+    width: "100%",
+    height: "80%",
+  },
+  closeButton: {
+    position: "absolute",
+    top: 40,
+    right: 20,
+    zIndex: 1,
+    padding: 8,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    borderRadius: 20,
   },
 });

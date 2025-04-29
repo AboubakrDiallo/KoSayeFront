@@ -9,33 +9,92 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import axios from "axios";
+import { API_URL } from "../config";
 
-// Écran d'Inscription
-export default function EcranInscription() {
+export default function Inscription() {
   const [prenom, setPrenom] = useState("");
   const [nom, setNom] = useState("");
-  const [emailOuTel, setEmailOuTel] = useState("");
+  const [email, setEmail] = useState("");
   const [motDePasse, setMotDePasse] = useState("");
   const [confirmerMotDePasse, setConfirmerMotDePasse] = useState("");
+  const [telephone, setTelephone] = useState("");
+  const [adresse, setAdresse] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleInscription = () => {
-    // TODO: Ajouter la validation des champs
-    if (motDePasse !== confirmerMotDePasse) {
-      alert("Les mots de passe ne correspondent pas.");
-      return;
+  const validateForm = () => {
+    if (
+      !prenom ||
+      !nom ||
+      !email ||
+      !motDePasse ||
+      !confirmerMotDePasse ||
+      !telephone ||
+      !adresse
+    ) {
+      Alert.alert("Erreur", "Veuillez remplir tous les champs");
+      return false;
     }
-    console.log("Tentative d'inscription:", {
-      prenom,
-      nom,
-      emailOuTel,
-      motDePasse,
-    });
-    // TODO: Implémenter la logique d'inscription (appel API, etc.)
-    // Si l'inscription réussit:
-    router.replace("/confirmation_succes"); // Utilise replace pour ne pas pouvoir revenir à l'inscription
+
+    if (motDePasse !== confirmerMotDePasse) {
+      Alert.alert("Erreur", "Les mots de passe ne correspondent pas");
+      return false;
+    }
+
+    if (motDePasse.length < 8) {
+      Alert.alert(
+        "Erreur",
+        "Le mot de passe doit contenir au moins 8 caractères"
+      );
+      return false;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      Alert.alert("Erreur", "Veuillez entrer une adresse email valide");
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleInscription = async () => {
+    if (!validateForm()) return;
+
+    setLoading(true);
+    try {
+      const response = await axios.post(`${API_URL}/api/v1/user/register`, {
+        email: email,
+        password: motDePasse,
+        firstname: prenom,
+        lastname: nom,
+        phone: telephone,
+        adress: adresse,
+      });
+
+      if (response.status === 200 || response.status === 201) {
+        Alert.alert("Succès", "Inscription réussie !");
+        router.replace("/confirmation_succes");
+      }
+    } catch (error: any) {
+      console.error("Erreur inscription:", error);
+      if (error.response) {
+        Alert.alert(
+          "Erreur",
+          error.response.data.message ||
+            "Une erreur est survenue lors de l'inscription"
+        );
+      } else {
+        Alert.alert("Erreur", "Impossible de contacter le serveur");
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -58,10 +117,11 @@ export default function EcranInscription() {
           {/* Champs de saisie */}
           <TextInput
             style={styles.input}
-            placeholder="Entrez votre prenom"
+            placeholder="Entrez votre prénom"
             value={prenom}
             onChangeText={setPrenom}
             autoCapitalize="words"
+            editable={!loading}
           />
           <TextInput
             style={styles.input}
@@ -69,14 +129,31 @@ export default function EcranInscription() {
             value={nom}
             onChangeText={setNom}
             autoCapitalize="words"
+            editable={!loading}
           />
           <TextInput
             style={styles.input}
-            placeholder="E-mail/numéro de téléphone"
-            value={emailOuTel}
-            onChangeText={setEmailOuTel}
-            keyboardType="email-address" // Ou phone-pad selon validation future
+            placeholder="Adresse email"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
             autoCapitalize="none"
+            editable={!loading}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Numéro de téléphone"
+            value={telephone}
+            onChangeText={setTelephone}
+            keyboardType="phone-pad"
+            editable={!loading}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Adresse"
+            value={adresse}
+            onChangeText={setAdresse}
+            editable={!loading}
           />
           <TextInput
             style={styles.input}
@@ -84,6 +161,7 @@ export default function EcranInscription() {
             value={motDePasse}
             onChangeText={setMotDePasse}
             secureTextEntry
+            editable={!loading}
           />
           <TextInput
             style={styles.input}
@@ -91,14 +169,20 @@ export default function EcranInscription() {
             value={confirmerMotDePasse}
             onChangeText={setConfirmerMotDePasse}
             secureTextEntry
+            editable={!loading}
           />
 
           {/* Bouton S'inscrire */}
           <TouchableOpacity
-            style={styles.boutonInscrire}
+            style={[styles.boutonInscrire, loading && styles.buttonDisabled]}
             onPress={handleInscription}
+            disabled={loading}
           >
-            <Text style={styles.texteBoutonInscrire}>S'inscrire</Text>
+            {loading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.texteBoutonInscrire}>S'inscrire</Text>
+            )}
           </TouchableOpacity>
 
           {/* Conditions d'utilisation */}
@@ -124,7 +208,7 @@ const styles = StyleSheet.create({
   conteneurScroll: {
     flexGrow: 1,
     paddingHorizontal: 25,
-    paddingVertical: 20, // Espace vertical
+    paddingVertical: 20,
     justifyContent: "center",
   },
   titrePrincipal: {
@@ -136,31 +220,33 @@ const styles = StyleSheet.create({
   },
   sousTitreIntro: {
     fontSize: 18,
-    color: "#333333", // Un peu plus clair que le titre
+    color: "#333333",
     textAlign: "center",
     marginBottom: 30,
   },
   input: {
-    backgroundColor: "#F0F0F0", // Fond gris clair pour les inputs
+    backgroundColor: "#F0F0F0",
     borderRadius: 8,
     paddingHorizontal: 15,
-    paddingVertical: 14, // Légèrement plus haut
+    paddingVertical: 14,
     fontSize: 16,
     marginBottom: 15,
     color: "#000",
-    borderWidth: 0, // Pas de bordure visible explicitement
   },
   boutonInscrire: {
-    backgroundColor: "#F59E0B", // Couleur orange
+    backgroundColor: "#F59E0B",
     paddingVertical: 15,
     borderRadius: 8,
     alignItems: "center",
-    marginTop: 15, // Espace au-dessus du bouton
-    marginBottom: 25, // Espace en dessous
+    marginTop: 15,
+    marginBottom: 25,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   texteBoutonInscrire: {
     color: "#FFFFFF",
-    fontSize: 18, // Texte un peu plus grand
+    fontSize: 18,
     fontWeight: "bold",
   },
   texteConditions: {

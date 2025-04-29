@@ -10,11 +10,25 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useProfile } from "../contexts/ProfileContext";
+
+// Définir un type pour les icônes Ionicons utilisées
+type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
+
+interface SettingsItem {
+  id: string;
+  title: string;
+  icon: IoniconName; // Utiliser le type défini
+  color: string;
+  value?: string; // Rendre la valeur optionnelle si elle n'est pas toujours présente
+}
 
 export default function ParametreScreen() {
   const router = useRouter();
+  const { profileImage } = useProfile();
 
-  const settingsItems = [
+  // Utiliser l'interface pour typer le tableau
+  const settingsItems: SettingsItem[] = [
     {
       id: "notification",
       title: "Notification",
@@ -49,8 +63,28 @@ export default function ParametreScreen() {
   ];
 
   const handleSettingPress = (id: string) => {
-    // Implémenter la navigation vers les différentes sections
-    console.log("Setting pressed:", id);
+    switch (id) {
+      case "compte":
+        router.push("/compte");
+        break;
+      case "notification":
+        router.push("/notification");
+        break;
+      case "langue":
+        router.push("/langue");
+        break;
+      case "confidentialite":
+        router.push("/confidentialite");
+        break;
+      case "centre-aide":
+        router.push("/aide");
+        break;
+      case "a-propos":
+        router.push("/a-propos");
+        break;
+      default:
+        console.log("Setting pressed:", id);
+    }
   };
 
   return (
@@ -74,12 +108,7 @@ export default function ParametreScreen() {
             style={styles.profileCard}
             onPress={() => handleSettingPress("compte")}
           >
-            <Image
-              source={{
-                uri: "https://images.unsplash.com/photo-1531384441138-2736e62e0919?q=80&w=200&h=200&auto=format&fit=crop",
-              }}
-              style={styles.profileImage}
-            />
+            <Image source={{ uri: profileImage }} style={styles.profileImage} />
             <View style={styles.profileInfo}>
               <Text style={styles.profileName}>Aboubacar Diallo</Text>
               <Text style={styles.profileEmail}>
@@ -101,6 +130,7 @@ export default function ParametreScreen() {
                 onPress={() => handleSettingPress(item.id)}
               >
                 <View style={styles.settingIconContainer}>
+                  {/* Le type est maintenant correct */}
                   <Ionicons name={item.icon} size={24} color={item.color} />
                 </View>
                 <Text style={styles.settingTitle}>{item.title}</Text>

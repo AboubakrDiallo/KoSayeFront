@@ -8,13 +8,18 @@ import {
   SafeAreaView,
   ScrollView,
   TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useProfile } from "../contexts/ProfileContext";
+import * as ImagePicker from "expo-image-picker";
 
 export default function DetailProfilScreen() {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
+  const { profileImage, setProfileImage } = useProfile();
   const [userInfo, setUserInfo] = useState({
     firstName: "Aboubacar",
     lastName: "Diallo",
@@ -24,13 +29,39 @@ export default function DetailProfilScreen() {
     birthDate: "15/03/1995",
   });
 
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      alert(
+        "Désolé, nous avons besoin de la permission d'accéder à votre galerie pour changer la photo de profil."
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      setProfileImage(result.assets[0].uri);
+    }
+  };
+
   const handleSave = () => {
     setIsEditing(false);
-    // Ici, vous pouvez ajouter la logique pour sauvegarder les modifications
     console.log("Saving profile changes:", userInfo);
   };
 
-  const InfoField = ({ label, value, field }) => {
+  interface InfoFieldProps {
+    label: string;
+    value: string;
+    field: keyof typeof userInfo;
+  }
+
+  const InfoField: React.FC<InfoFieldProps> = ({ label, value, field }) => {
     return (
       <View style={styles.fieldContainer}>
         <Text style={styles.fieldLabel}>{label}</Text>
@@ -41,6 +72,7 @@ export default function DetailProfilScreen() {
             onChangeText={(text) =>
               setUserInfo((prev) => ({ ...prev, [field]: text }))
             }
+            keyboardType={field === "phone" ? "phone-pad" : "default"}
           />
         ) : (
           <Text style={styles.fieldValue}>{value}</Text>
@@ -51,7 +83,6 @@ export default function DetailProfilScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => router.back()}
@@ -70,59 +101,74 @@ export default function DetailProfilScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scrollView}>
-        {/* Photo de profil */}
-        <View style={styles.profileImageSection}>
-          <Image
-            source={{
-              uri: "https://images.unsplash.com/photo-1531384441138-2736e62e0919?q=80&w=200&h=200&auto=format&fit=crop",
-            }}
-            style={styles.profileImage}
-          />
-          {isEditing && (
-            <TouchableOpacity style={styles.changePhotoButton}>
-              <Text style={styles.changePhotoText}>Changer la photo</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Informations personnelles */}
-        <View style={styles.infoSection}>
-          <Text style={styles.sectionTitle}>Informations Personnelles</Text>
-          <View style={styles.infoContainer}>
-            <InfoField
-              label="Prénom"
-              value={userInfo.firstName}
-              field="firstName"
-            />
-            <InfoField label="Nom" value={userInfo.lastName} field="lastName" />
-            <InfoField label="Email" value={userInfo.email} field="email" />
-            <InfoField label="Téléphone" value={userInfo.phone} field="phone" />
-            <InfoField
-              label="Adresse"
-              value={userInfo.address}
-              field="address"
-            />
-            <InfoField
-              label="Date de naissance"
-              value={userInfo.birthDate}
-              field="birthDate"
-            />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.keyboardAvoiding}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
+      >
+        <ScrollView
+          style={styles.scrollView}
+          keyboardShouldPersistTaps="always"
+        >
+          <View style={styles.profileImageSection}>
+            <Image source={{ uri: profileImage }} style={styles.profileImage} />
+            {isEditing && (
+              <TouchableOpacity
+                style={styles.changePhotoButton}
+                onPress={pickImage}
+              >
+                <Text style={styles.changePhotoText}>Changer la photo</Text>
+              </TouchableOpacity>
+            )}
           </View>
-        </View>
 
-        {/* Options de sécurité */}
-        <View style={styles.securitySection}>
-          <Text style={styles.sectionTitle}>Sécurité</Text>
-          <TouchableOpacity style={styles.securityButton}>
-            <Ionicons name="lock-closed" size={24} color="#F59E0B" />
-            <Text style={styles.securityButtonText}>
-              Changer le mot de passe
-            </Text>
-            <Ionicons name="chevron-forward" size={24} color="#000" />
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+          <View style={styles.infoSection}>
+            <Text style={styles.sectionTitle}>Informations Personnelles</Text>
+            <View style={styles.infoContainer}>
+              <InfoField
+                label="Prénom"
+                value={userInfo.firstName}
+                field="firstName"
+              />
+              <InfoField
+                label="Nom"
+                value={userInfo.lastName}
+                field="lastName"
+              />
+              <InfoField label="Email" value={userInfo.email} field="email" />
+              <InfoField
+                label="Téléphone"
+                value={userInfo.phone}
+                field="phone"
+              />
+              <InfoField
+                label="Adresse"
+                value={userInfo.address}
+                field="address"
+              />
+              <InfoField
+                label="Date de naissance"
+                value={userInfo.birthDate}
+                field="birthDate"
+              />
+            </View>
+          </View>
+
+          <View style={styles.securitySection}>
+            <Text style={styles.sectionTitle}>Sécurité</Text>
+            <TouchableOpacity
+              style={styles.securityButton}
+              onPress={() => router.push("/changer_mot_de_passe")}
+            >
+              <Ionicons name="lock-closed" size={24} color="#F59E0B" />
+              <Text style={styles.securityButtonText}>
+                Changer le mot de passe
+              </Text>
+              <Ionicons name="chevron-forward" size={24} color="#000" />
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -131,6 +177,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff",
+  },
+  keyboardAvoiding: {
+    flex: 1,
   },
   header: {
     flexDirection: "row",
