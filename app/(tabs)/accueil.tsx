@@ -34,12 +34,12 @@ interface Category {
 interface Product {
   id: string;
   name: string;
-  price: number;
+  price: number | string;
   image?: string;
   description?: string;
   category: { id: string; name: string };
   propertyValues: { property_id: string; value: string }[];
-  variants: { id: string; name: string; price: number; stock: number; image?: string }[];
+  variants: { id: string; name: string; price: number | string; stock: number; image?: string }[];
 }
 
 // --- Données de secours ---
@@ -143,19 +143,11 @@ const ProductCard = ({ item }: { item: Product }) => (
   <TouchableOpacity
     style={styles.cardContainer}
     onPress={() => {
+      console.log('Navigation vers detail_produit avec productId:', item.id);
       router.push({
         pathname: "/detail_produit",
         params: {
-          id: item.id,
-          name: item.name,
-          price: item.price.toString(),
-          // image: item.variants[0]?.image || "https://placehold.co/300x300", // Supprime cette ligne
-          description: item.description || "Description non disponible",
-          variants: JSON.stringify(item.variants), // Passe le tableau complet des variantes
-          // sizes: JSON.stringify(item.variants.map((v) => v.name) || ["Unique"]), // Peut être dérivé des variantes
-          // availableSizes: JSON.stringify(
-          //   item.variants.filter((v) => v.stock > 0).map((v) => v.name) || ["Unique"]
-          // ), // Peut être dérivé des variantes
+          productId: item.id,
         },
       });
     }}
@@ -210,11 +202,12 @@ export default function EcranAccueil() {
       setIsLoading(true);
       try {
         const token = await getToken();
+        console.log('Token utilisé:', token);
 
         if (token) {
           try {
             const userResponse = await api.get("/user");
-            console.log("Réponse utilisateur :", userResponse.data);
+            console.log("Réponse utilisateur :", JSON.stringify(userResponse.data, null, 2));
             setUserName(`${userResponse.data.data.firstname} ${userResponse.data.data.lastname}`);
           } catch (error) {
             console.error("Erreur récupération utilisateur :", error);
@@ -228,34 +221,41 @@ export default function EcranAccueil() {
         // Récupérer les catégories
         try {
           const categoriesResponse = await api.get("/categories");
-          console.log("Réponse catégories :", categoriesResponse.data);
-          setCategories(categoriesResponse.data.data.data || fallbackCategories);
-        } catch (error) {
+          console.log("Réponse catégories :", JSON.stringify(categoriesResponse.data, null, 2));
+          const fetchedCategories = categoriesResponse.data.data?.data || [];
+          setCategories(fetchedCategories.length > 0 ? fetchedCategories : fallbackCategories);
+        } catch (error: any) {
           console.error("Erreur récupération catégories :", error);
+          console.log("Détails erreur:", JSON.stringify(error.response?.data, null, 2));
           setCategories(fallbackCategories);
         }
 
         // Récupérer les produits en vedette
         try {
           const featuredResponse = await api.get("/products?page=1&limit=5");
-          console.log("Réponse produits en vedette :", featuredResponse.data);
-          setFeaturedProducts(featuredResponse.data.data.data || fallbackProducts);
-        } catch (error) {
+          console.log("Réponse produits en vedette :", JSON.stringify(featuredResponse.data, null, 2));
+          const fetchedFeatured = featuredResponse.data.data?.data || [];
+          setFeaturedProducts(fetchedFeatured.length > 0 ? fetchedFeatured : fallbackProducts);
+        } catch (error: any) {
           console.error("Erreur récupération produits en vedette :", error);
+          console.log("Détails erreur:", JSON.stringify(error.response?.data, null, 2));
           setFeaturedProducts(fallbackProducts);
         }
 
         // Récupérer les produits populaires
         try {
           const popularResponse = await api.get("/products?page=2&limit=5");
-          console.log("Réponse produits populaires :", popularResponse.data);
-          setPopularProducts(popularResponse.data.data.data || fallbackProducts);
-        } catch (error) {
+          console.log("Réponse produits populaires :", JSON.stringify(popularResponse.data, null, 2));
+          const fetchedPopular = popularResponse.data.data?.data || [];
+          setPopularProducts(fetchedPopular.length > 0 ? fetchedPopular : fallbackProducts);
+        } catch (error: any) {
           console.error("Erreur récupération produits populaires :", error);
+          console.log("Détails erreur:", JSON.stringify(error.response?.data, null, 2));
           setPopularProducts(fallbackProducts);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Erreur globale :", error);
+        console.log("Détails erreur:", JSON.stringify(error.response?.data, null, 2));
         setUserName("Bienvenue !");
         setCategories(fallbackCategories);
         setFeaturedProducts(fallbackProducts);
