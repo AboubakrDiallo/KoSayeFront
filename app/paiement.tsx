@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,15 +9,27 @@ import {
   SafeAreaView,
   StatusBar,
   Alert,
+  ActivityIndicator,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useCart } from "../contexts/CartContext";
+import api from "./api/api";
+import { getToken } from "./utils/auth";
+
+type PaymentMethod = 'orange' | 'areeba';
 
 export default function PaymentScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    orderId: string;
+    amount: string;
+    paymentMethod: PaymentMethod;
+  }>();
   const { items, getCartTotal, clearCart } = useCart();
   const { subtotal, discount, shippingFee, total } = getCartTotal();
+  const [loading, setLoading] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState("");
 
   // État pour le formulaire
   const [formData, setFormData] = useState({
@@ -80,6 +92,73 @@ export default function PaymentScreen() {
         },
       },
     ]);
+  };
+
+  const handlePayment = async () => {
+    if (!phoneNumber) {
+      Alert.alert("Erreur", "Veuillez entrer votre numéro de téléphone");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const token = await getToken();
+      
+      if (!token) {
+        Alert.alert("Erreur", "Session expirée. Veuillez vous reconnecter.");
+        router.push("/connexion");
+        return;
+      }
+
+      const response = await api.post('/payment/process', {
+        orderId: params.orderId,
+        amount: parseFloat(params.amount),
+        paymentMethod: params.paymentMethod,
+        phoneNumber: phoneNumber.trim()
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      console.log('Réponse du paiement:', response.data);
+
+      if (response.data.status === 'success') {
+        Alert.alert(
+          "Succès",
+          "Votre paiement a été effectué avec succès",
+          [
+            {
+              text: "OK",
+              onPress: () => router.replace("/(tabs)/accueil")
+            }
+          ]
+        );
+      } else {
+        Alert.alert(
+          "Erreur",
+          "Le paiement a échoué. Veuillez réessayer.",
+          [
+            {
+              text: "OK",
+              onPress: () => router.back()
+            }
+          ]
+        );
+      }
+    } catch (error: any) {
+      console.error("Erreur lors du paiement:", error);
+      let errorMessage = "Une erreur est survenue lors du paiement";
+      
+      if (error.response?.status === 401) {
+        errorMessage = "Session expirée. Veuillez vous reconnecter.";
+        router.push("/connexion");
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
+      Alert.alert("Erreur", errorMessage);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -217,8 +296,21 @@ export default function PaymentScreen() {
       </ScrollView>
 
       {/* Bouton de paiement */}
-      <TouchableOpacity style={styles.paymentButton} onPress={handleSubmit}>
-        <Text style={styles.paymentButtonText}>Payer ${total}</Text>
+      <TouchableOpacity 
+        style={[
+          styles.paymentButton,
+          loading && styles.paymentButtonDisabled
+        ]}
+        onPress={handlePayment}
+        disabled={loading}
+      >
+        {loading ? (
+          <ActivityIndicator color="#FFF" />
+        ) : (
+          <Text style={styles.paymentButtonText}>
+            Payer avec {params.paymentMethod === 'orange' ? 'Orange Money' : 'Areeba'}
+          </Text>
+        )}
       </TouchableOpacity>
     </SafeAreaView>
   );
@@ -336,6 +428,9 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 30,
     alignItems: "center",
+  },
+  paymentButtonDisabled: {
+    opacity: 0.7,
   },
   paymentButtonText: {
     color: "#FFF",

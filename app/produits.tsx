@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -7,235 +7,430 @@ import {
   TouchableOpacity,
   Image,
   Dimensions,
+  ActivityIndicator,
+  RefreshControl,
+  TextInput,
+  ScrollView,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import api from "./api/api";
+import { getToken, removeToken } from "./utils/auth";
 
-const { width } = Dimensions.get("window");
-const NUM_COLUMNS = 2;
-// Calcul de la largeur de la carte en fonction de la largeur de l'écran, du nombre de colonnes et des marges
-const CARD_MARGIN = 10;
-const CARD_WIDTH = (width - CARD_MARGIN * (NUM_COLUMNS + 1)) / NUM_COLUMNS;
-
-// --- Données Fictives (combinées et étendues) ---
-const allProducts = [
-  {
-    id: "1",
-    name: "Montre",
-    price: "40",
-    image:
-      "https://images.unsplash.com/photo-1523170335258-f5ed11844a49?q=80&w=300&h=300&auto=format&fit=crop",
-    description:
-      "Une montre élégante et moderne, parfaite pour toutes les occasions. Design minimaliste avec un cadran noir et un bracelet en cuir véritable.",
-    brand: "Rolex",
-    sizes: ["S", "M", "L"],
-    availableSizes: ["S", "M"],
-  },
-  {
-    id: "2",
-    name: "Pompe Nike",
-    price: "430",
-    image:
-      "https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=300&h=300&auto=format&fit=crop",
-    description:
-      "Chaussures de sport Nike dernière génération. Confort optimal et design moderne pour vos performances sportives.",
-    brand: "Nike",
-    sizes: ["36", "37", "38", "39", "40", "41", "42", "43", "44"],
-    availableSizes: ["38", "40", "41", "42"],
-  },
-  {
-    id: "3",
-    name: "Airpods",
-    price: "333",
-    image:
-      "https://images.unsplash.com/photo-1588423771073-b8903fbb85b5?q=80&w=300&h=300&auto=format&fit=crop",
-    description:
-      "Écouteurs sans fil avec une qualité sonore exceptionnelle. Connexion instantanée et autonomie longue durée.",
-    brand: "Apple",
-    sizes: ["Unique"],
-    availableSizes: ["Unique"],
-  },
-  {
-    id: "4",
-    name: "Casque Audio",
-    price: "120",
-    image:
-      "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=300&h=300&auto=format&fit=crop",
-    description:
-      "Casque audio premium avec réduction de bruit active. Son immersif et confort optimal.",
-    brand: "Sony",
-    sizes: ["Unique"],
-    availableSizes: ["Unique"],
-  },
-  {
-    id: "5",
-    name: "LG TV",
-    price: "330",
-    image:
-      "https://images.unsplash.com/photo-1593784991095-a205069470b6?q=80&w=300&h=300&auto=format&fit=crop",
-    description:
-      "Télévision LED 4K avec une qualité d'image exceptionnelle. Smart TV avec accès à toutes vos applications préférées.",
-    brand: "LG",
-    sizes: ['43"', '50"', '55"', '65"'],
-    availableSizes: ['43"', '55"'],
-  },
-  {
-    id: "6",
-    name: "Cagoule",
-    price: "50",
-    image:
-      "https://images.unsplash.com/photo-1576871337622-98d48d1cf531?q=80&w=300&h=300&auto=format&fit=crop",
-    description:
-      "Cagoule de protection thermique haute performance. Idéale pour les activités en montagne et sports d'hiver.",
-    brand: "Puma",
-    sizes: ["S", "M", "L"],
-    availableSizes: ["S", "L"],
-  },
-  {
-    id: "7",
-    name: "Veste",
-    price: "400",
-    image:
-      "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?q=80&w=300&h=300&auto=format&fit=crop",
-    description:
-      "Veste légère et confortable, parfaite pour la mi-saison. Matériaux de haute qualité et coupe moderne.",
-    brand: "The North Face",
-    sizes: ["XS", "S", "M", "L", "XL"],
-    availableSizes: ["S", "M", "L"],
-  },
-  {
-    id: "8",
-    name: "Chaussures",
-    price: "250",
-    image:
-      "https://images.unsplash.com/photo-1549298916-b41d501d3772?q=80&w=300&h=300&auto=format&fit=crop",
-    description:
-      "Chaussures de ville élégantes en cuir véritable. Design intemporel et confort optimal.",
-    brand: "Nike",
-    sizes: ["40", "41", "42", "43", "44", "45"],
-    availableSizes: ["41", "42", "44"],
-  },
-];
-
-// Interface pour un produit
 interface Product {
   id: string;
   name: string;
-  price: string;
-  image: string;
-  description: string;
-  brand: string;
-  sizes: string[];
-  availableSizes: string[];
+  price: number;
+  image?: string;
+  description?: string;
+  brand?: string;
+  sizes?: string[];
+  availableSizes?: string[];
+  variants?: Variant[];
 }
 
-// Props pour la carte produit
-interface ProductGridCardProps {
-  item: Product;
-  onPressAdd: () => void;
-  onPressHeart: () => void;
-  isFavorite: boolean;
+interface Variant {
+  id: string;
+  name: string;
+  price: number;
+  stock: number;
+  image?: string;
 }
 
-const ProductGridCard = ({
-  item,
-  onPressAdd,
-  onPressHeart,
-  isFavorite,
-}: ProductGridCardProps) => (
-  <View style={styles.cardOuterContainer}>
-    <TouchableOpacity style={styles.cardInnerContainer}>
-      <Image
-        source={{ uri: item.image }}
-        style={styles.cardImage}
-        resizeMode="cover"
-      />
-      {/* Overlay semi-transparent en bas */}
-      <View style={styles.textOverlay}>
-        <Text style={styles.cardName} numberOfLines={1}>
-          {item.name}
-        </Text>
-        <Text style={styles.cardPrice}>{item.price}</Text>
-      </View>
-      {/* Bouton Coeur */}
-      <TouchableOpacity
-        style={styles.heartIconContainer}
-        onPress={onPressHeart}
-      >
-        <Ionicons
-          name={isFavorite ? "heart" : "heart-outline"} // Change l'icône si favori
-          size={22}
-          color={isFavorite ? "#E53935" : "#FFFFFF"} // Change la couleur si favori
-        />
-      </TouchableOpacity>
-      {/* Bouton Ajouter */}
-      <TouchableOpacity style={styles.addIconContainer} onPress={onPressAdd}>
-        <Ionicons name="add" size={24} color="#000000" />
-      </TouchableOpacity>
-    </TouchableOpacity>
-  </View>
-);
+const { width } = Dimensions.get("window");
+const NUM_COLUMNS = 2;
+const CARD_MARGIN = 10;
+const CARD_WIDTH = (width - CARD_MARGIN * (NUM_COLUMNS + 1)) / NUM_COLUMNS;
 
-// --- Écran Liste Produits ---
 export default function ProductsScreen() {
-  const [favorites, setFavorites] = React.useState<Set<string>>(
-    new Set(["2", "5"])
+  const [products, setProducts] = useState<Product[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<"price-asc" | "price-desc" | "name">("name");
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const fetchProducts = async (pageNum: number = 1, shouldRefresh: boolean = false) => {
+    try {
+      if (shouldRefresh) {
+        setLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
+
+      const params = new URLSearchParams({
+        page: pageNum.toString(),
+        limit: '10',
+        ...(selectedCategory && { category_id: selectedCategory }),
+        ...(searchQuery && { search: searchQuery }),
+      });
+
+      const response = await api.get(`/products?${params}`);
+      const newProducts = response.data.data.data || [];
+      
+      if (shouldRefresh) {
+        setProducts(newProducts);
+      } else {
+        setProducts(prev => [...prev, ...newProducts]);
+      }
+
+      setHasMore(newProducts.length === 10);
+      setPage(pageNum);
+    } catch (error) {
+      console.error("Erreur lors de la récupération des produits:", error);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProducts(1, true);
+  }, [selectedCategory, searchQuery]);
+
+  useEffect(() => {
+    let filtered = [...products];
+
+    // Filtrage par recherche
+    if (searchQuery) {
+      filtered = filtered.filter(product =>
+        product.name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    // Filtrage par catégorie
+    if (selectedCategory) {
+      filtered = filtered.filter(product =>
+        product.brand === selectedCategory
+      );
+    }
+
+    // Tri des produits
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "price-asc":
+          return a.price - b.price;
+        case "price-desc":
+          return b.price - a.price;
+        case "name":
+          return a.name.localeCompare(b.name);
+        default:
+          return 0;
+      }
+    });
+
+    setFilteredProducts(filtered);
+  }, [products, searchQuery, selectedCategory, sortBy]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchProducts(1, true);
+  };
+
+  const loadMore = () => {
+    if (!loadingMore && hasMore) {
+      fetchProducts(page + 1);
+    }
+  };
+
+  const toggleFavorite = async (productId: string) => {
+    try {
+      const token = await getToken();
+      console.log('ProductsScreen - Token récupéré :', token ? 'Présent' : 'Absent');
+      if (!token) {
+        console.warn('ProductsScreen - Aucun token trouvé, redirection vers connexion');
+        Alert.alert("Erreur", "Vous devez être connecté pour ajouter aux favoris.");
+        router.push("/connexion");
+        return;
+      }
+  
+      const isFavorite = favorites.has(productId);
+      const previousFavorites = new Set(favorites);
+  
+      try {
+        if (isFavorite) {
+          console.log('ProductsScreen - Récupération wishlist pour productId:', productId);
+          const response = await api.get("/wishlist", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          console.log('ProductsScreen - Réponse GET /wishlist :', JSON.stringify(response.data, null, 2));
+          const wishlistItem = response.data.data.find(
+            (item: any) => item.product_id === productId
+          );
+          if (wishlistItem) {
+            console.log('ProductsScreen - Suppression wishlist item:', wishlistItem.id);
+            await api.delete(`/wishlist/${wishlistItem.id}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            setFavorites(prev => {
+              const newFavs = new Set(prev);
+              newFavs.delete(productId);
+              return newFavs;
+            });
+            Alert.alert("Succès", "Produit retiré des favoris.");
+          } else {
+            console.warn('ProductsScreen - Aucun item wishlist trouvé pour productId:', productId);
+            setFavorites(prev => {
+              const newFavs = new Set(prev);
+              newFavs.delete(productId);
+              return newFavs;
+            });
+          }
+        } else {
+          console.log('ProductsScreen - Ajout à la wishlist, productId:', productId);
+          await api.post(
+            "/wishlist",
+            { productId },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          setFavorites(prev => {
+            const newFavs = new Set(prev);
+            newFavs.add(productId);
+            return newFavs;
+          });
+          Alert.alert("Succès", "Produit ajouté aux favoris.");
+        }
+      } catch (error: any) {
+        console.error('ProductsScreen - Erreur modification favoris :', error.message);
+        console.log('ProductsScreen - Détails erreur :', JSON.stringify(error.response?.data, null, 2));
+        setFavorites(previousFavorites);
+        let errorMessage = "Impossible de modifier les favoris. Veuillez réessayer.";
+        if (error.response?.status === 401) {
+          console.warn('ProductsScreen - Erreur 401, redirection vers connexion');
+          errorMessage = "Session expirée. Veuillez vous reconnecter.";
+          await removeToken(); // Supprimer le token invalide
+          router.push("/connexion");
+        } else if (error.response?.data?.message) {
+          errorMessage = error.response.data.message;
+        }
+        Alert.alert("Erreur", errorMessage);
+      }
+    } catch (error) {
+      console.error('ProductsScreen - Erreur récupération token :', error);
+      Alert.alert("Erreur", "Impossible d'accéder aux favoris. Veuillez vous reconnecter.");
+      router.push("/connexion");
+    }
+  };
+
+  const handleAddToCart = async (product: Product) => {
+    try {
+      // Récupérer le panier actif ou en créer un
+      let cartResponse = await api.get("/cart/active");
+      let cart = cartResponse.data.data;
+
+      if (!cart) {
+        cartResponse = await api.post("/cart", { status: "draft" });
+        cart = cartResponse.data.data;
+      }
+
+      // Préparer les données pour l'ajout au panier
+      const cartItemData = {
+        cartId: cart.id,
+        productId: product.id,
+        quantity: 1,
+        unit_price: parseFloat(product.price.toString()),
+      };
+
+      console.log('Données envoyées au panier:', cartItemData);
+
+      // Ajouter le produit au panier
+      const response = await api.post('/cart-items', cartItemData);
+      console.log('Réponse ajout au panier:', response.data);
+
+      Alert.alert(
+        'Succès',
+        `${product.name} a été ajouté au panier`,
+        [
+          {
+            text: 'Continuer mes achats',
+            style: 'cancel',
+          },
+          {
+            text: 'Voir mon panier',
+            onPress: () => {
+              router.push({
+                pathname: '/panier',
+                params: { refresh: Date.now() }
+              });
+            },
+          },
+        ]
+      );
+    } catch (error: any) {
+      console.error('Erreur lors de l\'ajout au panier:', error);
+      console.log('Détails de l\'erreur:', error.response?.data);
+      
+      let errorMessage = 'Impossible d\'ajouter le produit au panier';
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
+      Alert.alert('Erreur', errorMessage);
+    }
+  };
+
+  const categories = Array.from(new Set(products.map(p => p.brand || "").filter(Boolean)));
+
+  const renderCategoryFilter = () => (
+    <ScrollView 
+      horizontal 
+      showsHorizontalScrollIndicator={false}
+      style={styles.categoryContainer}
+    >
+      <TouchableOpacity
+        style={[
+          styles.categoryButton,
+          !selectedCategory && styles.selectedCategory
+        ]}
+        onPress={() => setSelectedCategory(null)}
+      >
+        <Text>Tous</Text>
+      </TouchableOpacity>
+      {categories.map(category => (
+        <TouchableOpacity
+          key={category}
+          style={[
+            styles.categoryButton,
+            selectedCategory === category && styles.selectedCategory
+          ]}
+          onPress={() => setSelectedCategory(category)}
+        >
+          <Text>{category}</Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
   );
 
-  const toggleFavorite = (id: string) => {
-    setFavorites((prev) => {
-      const newFavs = new Set(prev);
-      if (newFavs.has(id)) {
-        newFavs.delete(id);
-      } else {
-        newFavs.add(id);
-      }
-      return newFavs;
-    });
-  };
-
-  const handleAddToCart = (item: Product) => {
-    console.log("Ajouter au panier:", item.name);
-    // TODO: Implémenter la logique d'ajout au panier
-  };
+  const renderSortOptions = () => (
+    <View style={styles.sortContainer}>
+      <Text style={styles.sortLabel}>Trier par:</Text>
+      <TouchableOpacity
+        style={[styles.sortButton, sortBy === "name" && styles.selectedSort]}
+        onPress={() => setSortBy("name")}
+      >
+        <Text>Nom</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.sortButton, sortBy === "price-asc" && styles.selectedSort]}
+        onPress={() => setSortBy("price-asc")}
+      >
+        <Text>Prix croissant</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.sortButton, sortBy === "price-desc" && styles.selectedSort]}
+        onPress={() => setSortBy("price-desc")}
+      >
+        <Text>Prix décroissant</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   const renderProduct = ({ item }: { item: Product }) => (
-    <TouchableOpacity
-      style={styles.productCard}
-      onPress={() => {
-        router.push({
-          pathname: "/detail_produit",
-          params: {
-            id: item.id,
-            name: item.name,
-            price: item.price,
-            image: item.image,
-            description: item.description,
-            sizes: JSON.stringify(item.sizes),
-            availableSizes: JSON.stringify(item.availableSizes),
-          },
-        });
-      }}
-    >
-      <Image source={{ uri: item.image }} style={styles.productImage} />
-      <View style={styles.productInfo}>
-        <Text style={styles.productName}>{item.name}</Text>
-        <Text style={styles.productPrice}>{item.price} €</Text>
-      </View>
-    </TouchableOpacity>
+    <View style={styles.productCard}>
+      <TouchableOpacity
+        onPress={() => {
+          router.push({
+            pathname: "/detail_produit",
+            params: {
+              id: item.id,
+              name: item.name,
+              price: item.price.toString(),
+              image: item.image || "",
+              description: item.description || "",
+              sizes: JSON.stringify(item.sizes || []),
+              availableSizes: JSON.stringify(item.availableSizes || []),
+              variants: JSON.stringify(item.variants || []),
+            },
+          });
+        }}
+      >
+        <Image 
+          source={{ uri: item.image || "https://placehold.co/300x300" }} 
+          style={styles.productImage} 
+        />
+        <View style={styles.productInfo}>
+          <Text style={styles.productName}>{item.name}</Text>
+          <Text style={styles.productPrice}>{item.price} €</Text>
+        </View>
+      </TouchableOpacity>
+      
+      <TouchableOpacity
+        style={styles.favoriteButton}
+        onPress={() => toggleFavorite(item.id)}
+      >
+        <Ionicons
+          name={favorites.has(item.id) ? "heart" : "heart-outline"}
+          size={20}
+          color={favorites.has(item.id) ? "red" : "black"}
+        />
+      </TouchableOpacity>
+      
+      <TouchableOpacity
+        style={styles.addButton}
+        onPress={() => handleAddToCart(item)}
+      >
+        <Ionicons name="add" size={20} color="white" />
+      </TouchableOpacity>
+    </View>
   );
+
+  const renderFooter = () => {
+    if (!loadingMore) return null;
+    return (
+      <View style={styles.footerLoader}>
+        <ActivityIndicator size="small" color="#F59E0B" />
+      </View>
+    );
+  };
+
+  if (loading && !refreshing) {
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#0000ff" />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* L'en-tête est géré par le layout `app/_layout.tsx` */}
+      <View style={styles.searchContainer}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Rechercher un produit..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+      </View>
+      
+      {renderCategoryFilter()}
+      {renderSortOptions()}
+
       <FlatList
-        data={allProducts}
+        data={filteredProducts}
         renderItem={renderProduct}
         keyExtractor={(item) => item.id}
         numColumns={NUM_COLUMNS}
         contentContainerStyle={styles.listContainer}
         columnWrapperStyle={styles.row}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={renderFooter}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text>Aucun produit disponible</Text>
+          </View>
+        }
       />
     </SafeAreaView>
   );
@@ -245,6 +440,17 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: "#FFFFFF",
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
   },
   listContainer: {
     paddingHorizontal: CARD_MARGIN / 2,
@@ -266,16 +472,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
+    overflow: "hidden",
   },
   productImage: {
     width: "100%",
     height: CARD_WIDTH,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
     backgroundColor: "#f5f5f5",
   },
   productInfo: {
     padding: 12,
+    position: "relative",
   },
   productName: {
     fontSize: 16,
@@ -285,64 +491,73 @@ const styles = StyleSheet.create({
   productPrice: {
     fontSize: 14,
     color: "#666",
-  },
-  cardOuterContainer: {
-    width: CARD_WIDTH,
-    marginHorizontal: CARD_MARGIN / 2,
-    marginBottom: CARD_MARGIN,
-    borderRadius: 10,
-    overflow: "hidden",
-    backgroundColor: "#f0f0f0",
-  },
-  cardInnerContainer: {
-    width: "100%",
-    height: "100%",
-  },
-  cardImage: {
-    width: "100%",
-    height: CARD_WIDTH * 1.2,
-    backgroundColor: "#e0e0e0",
-  },
-  textOverlay: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderBottomLeftRadius: 10,
-    borderBottomRightRadius: 10,
-  },
-  cardName: {
-    fontSize: 14,
     fontWeight: "bold",
-    color: "#FFFFFF",
   },
-  cardPrice: {
-    fontSize: 12,
-    color: "#FFFFFF",
-    marginTop: 2,
-  },
-  heartIconContainer: {
+  favoriteButton: {
     position: "absolute",
     top: 8,
     right: 8,
-    backgroundColor: "rgba(0, 0, 0, 0.3)",
-    padding: 6,
+    backgroundColor: "rgba(255, 255, 255, 0.7)",
     borderRadius: 15,
+    padding: 5,
   },
-  addIconContainer: {
+  addButton: {
     position: "absolute",
     bottom: 8,
     right: 8,
-    backgroundColor: "#FFFFFF",
-    padding: 5,
+    backgroundColor: "#F59E0B",
     borderRadius: 15,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.22,
-    shadowRadius: 2.22,
-    elevation: 3,
+    padding: 5,
+  },
+  searchContainer: {
+    padding: 10,
+    backgroundColor: "#fff",
+  },
+  searchInput: {
+    height: 40,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    backgroundColor: "#f5f5f5",
+  },
+  categoryContainer: {
+    flexDirection: "row",
+    padding: 10,
+    backgroundColor: "#fff",
+  },
+  categoryButton: {
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    marginRight: 10,
+    borderRadius: 20,
+    backgroundColor: "#f5f5f5",
+  },
+  selectedCategory: {
+    backgroundColor: "#F59E0B",
+  },
+  sortContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 10,
+    backgroundColor: "#fff",
+  },
+  sortLabel: {
+    marginRight: 10,
+    fontWeight: "bold",
+  },
+  sortButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginRight: 10,
+    borderRadius: 15,
+    backgroundColor: "#f5f5f5",
+  },
+  selectedSort: {
+    backgroundColor: "#F59E0B",
+  },
+  footerLoader: {
+    paddingVertical: 20,
+    alignItems: "center",
   },
 });

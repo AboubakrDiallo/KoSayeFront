@@ -16,6 +16,7 @@ import { router } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import api from "./api/api";
 import { AxiosError } from 'axios'; 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
 export default function EcranConnexion() {
@@ -56,17 +57,19 @@ export default function EcranConnexion() {
         email,
         password,
       });
-    const { token } = response.data;
-      if (response.data.token) {
+      const { token } = response.data;
+      if (token) {
+        // Sauvegarder le token complet avec le préfixe Bearer
+        const fullToken = `Bearer ${token.token}`;
         if (Platform.OS !== "web") {
-          await SecureStore.setItemAsync("authToken", response.data.token.token);
+          await SecureStore.setItemAsync("authToken", fullToken);
         } else {
-          localStorage.setItem("authToken", response.data.token.token);
+          localStorage.setItem("authToken", fullToken);
         }
-         console.log("Données de la réponse :", response.data);
-          Alert.alert("Succès", response.data.message || "Connexion réussie !");
-
-
+        // Sauvegarder aussi dans AsyncStorage pour la gestion du panier
+        await AsyncStorage.setItem("userToken", token.token);
+        console.log("Données de la réponse :", response.data);
+        Alert.alert("Succès", response.data.message || "Connexion réussie !");
         router.push("/(tabs)/accueil");
       }
     } catch (error) {

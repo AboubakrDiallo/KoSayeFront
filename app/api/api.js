@@ -3,7 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 const api = axios.create({
-  baseURL: 'http://172.20.10.2:3333/api/v1',
+  baseURL: 'http://192.168.1.144:3333/api/v1',
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -18,7 +18,7 @@ api.interceptors.request.use(
 
     if (Platform.OS !== 'web' && !isAuthRoute) {
       try {
-        token = await SecureStore.getItemAsync('authToken');
+        token = await SecureStore.getItemAsync('userToken');
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
         }
@@ -26,7 +26,7 @@ api.interceptors.request.use(
         console.warn('Erreur lors de la récupération du token (SecureStore):', error);
       }
     } else if (Platform.OS === 'web' && !isAuthRoute) {
-      token = localStorage.getItem('authToken');
+      token = localStorage.getItem('userToken');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }

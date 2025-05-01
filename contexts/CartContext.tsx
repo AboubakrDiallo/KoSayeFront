@@ -12,11 +12,14 @@ export interface CartItem {
   price: number;
   quantity: number;
   image: string;
+  productId: number;
+  variantId?: number;
+  cartId: number; // Ajouté pour PUT
 }
 
 interface CartContextType {
   items: CartItem[];
-  addItem: (item: CartItem) => Promise<void>;
+  addItem: (item: Omit<CartItem, 'id'> & { productId: number; variantId?: number }) => Promise<void>;
   removeItem: (id: string) => Promise<void>;
   updateQuantity: (id: string, quantity: number) => Promise<void>;
   clearCart: () => Promise<void>;
@@ -43,7 +46,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [items, setItems] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Récupérer le token
   const getToken = async (): Promise<string | null> => {
     try {
       if (Platform.OS === 'web') {
@@ -60,7 +62,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Sauvegarder dans AsyncStorage
   const saveCart = async (cartItems: CartItem[]) => {
     try {
       await AsyncStorage.setItem('cart', JSON.stringify(cartItems));
@@ -70,27 +71,30 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Charger le panier depuis l'API ou AsyncStorage
-  const fetchCart = async () => {
+  async function fetchCart() {
     try {
       const token = await getToken();
       if (token) {
         const response = await api.get('/cart/active');
         console.log('CartContext - Réponse GET /cart/active :', JSON.stringify(response.data, null, 2));
-
+  
         const cart = response.data.data;
         const cartItems = cart.items?.map((item: any) => ({
           id: item.id.toString(),
           name: item.product?.name || 'Produit inconnu',
-          brand: item.product?.category?.name || 'Inconnu',
-          price: parseFloat(item.unit_price) || 0,
+          brand: item.product?.category?.name || item.product?.categoryId || 'Inconnu',
+          price: parseFloat(item.unitPrice) || parseFloat(item.variant?.price) || parseFloat(item.product?.price) || 0,
           quantity: item.quantity,
-          image: item.product_variant?.image || item.product?.image || 'https://placehold.co/80x80',
+          image: item.variant?.image || item.product?.image || 'https://placehold.co/80x80',
+          productId: item.productId,
+          variantId: item.productVariantId,
+          cartId: item.cartId,
         })) || [];
-
+  
         setItems(cartItems);
         await saveCart(cartItems);
       } else {
+        console.warn('CartContext - Aucun token, chargement depuis AsyncStorage');
         const savedCart = await AsyncStorage.getItem('cart');
         console.log('CartContext - Contenu AsyncStorage :', savedCart);
         if (savedCart) {
@@ -108,37 +112,47 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setIsLoading(false);
     }
-  };
-
+  }
   useEffect(() => {
     fetchCart();
   }, []);
 
-  const addItem = async (item: CartItem) => {
+  const addItem = async (item: Omit<CartItem, 'id'> & { productId: number; variantId?: number }) => {
     try {
       const token = await getToken();
-      if (token) {
-        await fetchCart(); // Recharger pour éviter les conflits
+      if (!token) {
+        throw new Error('Aucun token d’authentification trouvé');
       }
 
+      const cartResponse = await api.get('/cart/active');
+      const cart = cartResponse.data.data;
+      if (!cart) {
+        throw new Error('Aucun panier actif trouvé');
+      }
+
+      const response = await api.post('/cart-items', {
+        cartId: cart.id,
+        productId: item.productId,
+        variantId: item.variantId,
+        quantity: item.quantity,
+        unit_price: item.price,
+      });
+      console.log('CartContext - Réponse POST /cart-items :', JSON.stringify(response.data, null, 2));
+
+      await fetchCart();
+    } catch (error: any) {
+      console.error('CartContext - Erreur addItem :', error.message);
+      console.log('CartContext - Détails erreur :', JSON.stringify(error.response?.data, null, 2));
       setItems((currentItems) => {
-        const existingItem = currentItems.find((i) => i.id === item.id);
-        let newItems;
-
-        if (existingItem) {
-          newItems = currentItems.map((i) =>
-            i.id === item.id ? { ...i, quantity: i.quantity + item.quantity } : i
-          );
-        } else {
-          newItems = [...currentItems, item];
-        }
-
+        const newItem = {
+          ...item,
+          id: `local-${Date.now()}`,
+          cartId: 0, // Valeur temporaire
+        };
+        const newItems = [...currentItems, newItem];
         saveCart(newItems);
-        console.log('CartContext - Article ajouté localement :', item);
         return newItems;
       });
-    } catch (error) {
-      console.error('CartContext - Erreur addItem :', error);
     }
   };
 
@@ -146,8 +160,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const token = await getToken();
       if (token) {
-        await api.delete(`/cart-items/${id}`);
-        console.log('CartContext - Article supprimé via DELETE /cart-items/', id);
+        await api.delete(`/carts/${id}`); // Ajusté pour correspondre aux routes
+        console.log('CartContext - Article supprimé via DELETE /carts/', id);
         await fetchCart();
       } else {
         setItems((currentItems) => {
@@ -162,39 +176,45 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const updateQuantity = async (id: string, quantity: number) => {
-    if (quantity < 0) return;
-
+  async function updateQuantity(itemId: string, newQuantity: number) {
     try {
       const token = await getToken();
-      if (token) {
-        await api.patch(`/cart-items/${id}`, { quantity });
-        console.log('CartContext - Quantité mise à jour via PATCH /cart-items/', id);
-        await fetchCart();
-      } else {
-        setItems((currentItems) => {
-          const newItems = currentItems.map((item) =>
-            item.id === id ? { ...item, quantity } : item
-          );
-          saveCart(newItems);
-          return newItems;
-        });
+      if (!token) {
+        throw new Error('No authentication token found');
       }
+  
+      if (newQuantity < 1) {
+        throw new Error('Quantity must be at least 1');
+      }
+  
+      const response = await api.put(`/cart-items/${itemId}`, {
+        quantity: newQuantity,
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+  
+      console.log('CartContext - Réponse PUT /cart-items :', JSON.stringify(response.data, null, 2));
+  
+      setItems((prevItems) =>
+        prevItems.map((item) =>
+          item.id === itemId ? { ...item, quantity: newQuantity } : item
+        )
+      );
+  
+      await saveCart(items);
     } catch (error: any) {
       console.error('CartContext - Erreur updateQuantity :', error.message);
       console.log('CartContext - Détails erreur :', JSON.stringify(error.response?.data, null, 2));
+      throw error;
     }
-  };
-
+  }
   const clearCart = async () => {
     try {
       const token = await getToken();
       if (token) {
         const response = await api.get('/cart/active');
         const cart = response.data.data;
-        for (const item of cart.items || []) {
-          await api.delete(`/cart-items/${item.id}`);
-        }
+        await api.delete(`/carts/clear/${cart.id}`); // Ajusté pour correspondre aux routes
         console.log('CartContext - Panier vidé via API');
       }
       setItems([]);
@@ -211,7 +231,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const shippingFee = subtotal > 200 ? 0 : 5;
     const total = subtotal - discount + shippingFee;
 
-    return { subtotal, discount, shippingFee, total };
+   return { subtotal, discount, shippingFee, total };
   };
 
   if (isLoading) {
