@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import api from "../api/api";
+import { useAuth } from "../contexts/AuthContext";
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = width * 0.4;
@@ -84,9 +85,9 @@ const fallbackProducts: Product[] = [
 const useAuthToken = () => {
   const getToken = async (): Promise<string | null> => {
     if (Platform.OS !== 'web') {
-      return await SecureStore.getItemAsync('authToken');
+      return await SecureStore.getItemAsync('userToken');
     } else {
-      return localStorage.getItem('authToken');
+      return localStorage.getItem('userToken');
     }
   };
   return { getToken };
@@ -230,14 +231,33 @@ const ProductSection = ({
 );
 
 // --- Écran Principal Accueil ---
-export default function EcranAccueil() {
-  const [userName, setUserName] = useState("");
+export default function AccueilScreen() {
+  const { user } = useAuth();
   const [categories, setCategories] = useState<Category[]>([]);
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [popularProducts, setPopularProducts] = useState<Product[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { getToken } = useAuthToken();
+
+  const fetchUserData = async (token: string) => {
+    try {
+      console.log('=== RÉCUPÉRATION DONNÉES UTILISATEUR ===');
+      const response = await api.get('/user/profile', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      console.log('=== DONNÉES UTILISATEUR RÉCUPÉRÉES ===');
+      console.log('Données:', response.data.data);
+      
+      if (response.data.data) {
+        updateUserData(response.data.data);
+      }
+    } catch (error: any) {
+      console.error('=== ERREUR RÉCUPÉRATION DONNÉES UTILISATEUR ===');
+      console.error('Message:', error.message);
+      console.error('Réponse API:', error.response?.data);
+    }
+  };
 
   const fetchFavorites = async (token: string) => {
     try {
@@ -257,9 +277,9 @@ export default function EcranAccueil() {
           [{ text: "OK", onPress: () => router.push("/connexion") }]
         );
         if (Platform.OS !== "web") {
-          await SecureStore.deleteItemAsync("authToken");
+          await SecureStore.deleteItemAsync("userToken");
         } else {
-          localStorage.removeItem("authToken");
+          localStorage.removeItem("userToken");
         }
       }
     }
@@ -318,6 +338,7 @@ export default function EcranAccueil() {
       Alert.alert("Erreur", errorMessage);
     }
   };
+
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
@@ -326,33 +347,11 @@ export default function EcranAccueil() {
         console.log("Token utilisé:", token);
 
         if (token) {
-          try {
-            const userResponse = await api.get("/user", {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            console.log("Réponse utilisateur :", JSON.stringify(userResponse.data, null, 2));
-            setUserName(`${userResponse.data.data.firstname} ${userResponse.data.data.lastname}`);
-            await fetchFavorites(token);
-          } catch (error: any) {
-            console.error("Erreur récupération utilisateur :", error);
-            console.log("Détails erreur:", JSON.stringify(error.response?.data, null, 2));
-            setUserName("Bienvenue !");
-            if (error.response?.status === 403 || error.response?.status === 401) {
-              Alert.alert(
-                "Erreur d'authentification",
-                "Session invalide ou permissions insuffisantes. Veuillez vous reconnecter.",
-                [{ text: "OK", onPress: () => router.push("/connexion") }]
-              );
-              if (Platform.OS !== "web") {
-                await SecureStore.deleteItemAsync("authToken");
-              } else {
-                localStorage.removeItem("authToken");
-              }
-            }
-          }
+          await fetchUserData(token);
+          await fetchFavorites(token);
         } else {
           console.log("Aucun token trouvé");
-          setUserName("Bienvenue !");
+          router.replace("/connexion");
         }
 
         try {
@@ -390,7 +389,6 @@ export default function EcranAccueil() {
       } catch (error: any) {
         console.error("Erreur globale :", error);
         console.log("Détails erreur:", JSON.stringify(error.response?.data, null, 2));
-        setUserName("Bienvenue !");
         setCategories(fallbackCategories);
         setFeaturedProducts(fallbackProducts);
         setPopularProducts(fallbackProducts);
@@ -402,47 +400,42 @@ export default function EcranAccueil() {
     fetchData();
   }, []);
 
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#0000ff" />
+      </View>
+    );
+  }
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#F59E0B" />
-        </View>
-      ) : (
-        <ScrollView
-          style={styles.scrollView}
-          showsVerticalScrollIndicator={false}
-        >
-          <Header userName={userName} />
-          <CategoryList categories={categories} />
-          <Banner />
-          <ProductSection
-            title="En vedette"
-            data={featuredProducts}
-            favorites={favorites}
-            toggleFavorite={toggleFavorite}
-          />
-          <ProductSection
-            title="Populaire"
-            data={popularProducts}
-            favorites={favorites}
-            toggleFavorite={toggleFavorite}
-          />
-          <View style={{ height: 20 }} />
-        </ScrollView>
-      )}
+    <SafeAreaView style={styles.container}>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <Header userName={user ? `${user.firstname} ${user.lastname}` : "Bienvenue !"} />
+        <CategoryList categories={categories} />
+        <Banner />
+        <ProductSection
+          title="Produits en vedette"
+          data={featuredProducts}
+          favorites={favorites}
+          toggleFavorite={toggleFavorite}
+        />
+        <ProductSection
+          title="Produits populaires"
+          data={popularProducts}
+          favorites={favorites}
+          toggleFavorite={toggleFavorite}
+        />
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 // --- Styles ---
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
     backgroundColor: "#FFFFFF",
-  },
-  scrollView: {
-    flex: 1,
   },
   loadingContainer: {
     flex: 1,
@@ -585,3 +578,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 10,
   },
 });
+
+function updateUserData(data: any) {
+  throw new Error("Function not implemented.");
+}

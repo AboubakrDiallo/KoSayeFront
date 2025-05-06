@@ -13,9 +13,9 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import api from "./api/api";
 import { getToken } from "./utils/auth";
-
+import { useAuth } from "./contexts/AuthContext";
+import api from "./api/api";
 type PaymentMethod = 'orange' | 'areeba';
 
 interface CartItem {
@@ -68,6 +68,7 @@ interface Address {
 
 export default function VerificationScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [cart, setCart] = useState<Cart | null>(null);
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>('orange');
@@ -219,106 +220,58 @@ export default function VerificationScreen() {
         return;
       }
 
-      const orderData = {
-        addressChoice: selectedAddressId ? "existing" : "new",
+      // Vérifier qu'une adresse est sélectionnée ou qu'une nouvelle adresse est complète
+      if (!selectedAddressId) {
+        if (!newAddress.recipientName || !newAddress.city || !newAddress.phone) {
+          Alert.alert("Erreur", "Veuillez remplir tous les champs obligatoires de l'adresse");
+          return;
+        }
+      }
+
+      // Préparer les paramètres de redirection
+      const paymentParams: any = {
+        cartId: cart.id,
+        amount: cart.total.toFixed(2),
         paymentMethod: selectedPayment,
-        items: cart.items.map(item => ({
+        phoneNumber: newAddress.phone || user?.phone || "",
+        items: JSON.stringify(cart.items.map(item => ({
           productId: item.product.id,
-          productVariantId: item.variant?.id || null,
-          quantity: item.quantity
-        })),
-        ...(selectedAddressId ? { shippingAddressId: selectedAddressId } : {
-          newAddress: {
-            recipientName: newAddress.recipientName,
-            phone: newAddress.phone ? newAddress.phone.trim() : null,
-            city: newAddress.city,
-            additionalInfo: newAddress.additionalInfo || null,
-            isDefaultShipping: newAddress.isDefaultShipping ? 1 : 0,
-            street: "Rue principale",
-            postalCode: "00000",
-            country: "Guinée"
-          }
-        })
+          variantId: item.variant?.id || null,
+          quantity: item.quantity,
+          unitPrice: item.unit_price
+        })))
       };
 
-      console.log("Données envoyées pour validation:", orderData);
-
-      const response = await api.post(
-        `/carts/${cart.id}/validate`,
-        orderData,
-        {
-          headers: { 
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      console.log("Réponse de validation:", response.data);
-
-      if (response.data.success) {
-        const orderId = response.data.data.orderId;
-        const totalAmount = response.data.data.totalAmount;
-        
-        // Rediriger vers la page de paiement avec les informations nécessaires
-        router.push({
-          pathname: "/paiement",
-          params: {
-            orderId,
-            amount: totalAmount.toFixed(2),
-            paymentMethod: selectedPayment,
-            cartId: cart.id,
-            addressId: selectedAddressId || "new"
-          }
-        });
-      }
-    } catch (error: any) {
-      console.error("Erreur lors de la validation du panier:", error);
-      
-      if (error.response?.status === 400) {
-        const errorData = error.response.data;
-        if (errorData.message?.includes("Stock insuffisant")) {
-          // Extraire les détails du produit concerné
-          const { productId, variantId, availableStock, requestedQuantity } = errorData.data || {};
-          
-          // Trouver le produit concerné dans le panier
-          const problematicItem = cart.items.find(item => 
-            item.product.id === productId && 
-            item.variant?.id === variantId
-          );
-          
-          if (problematicItem) {
-            Alert.alert(
-              "Stock insuffisant",
-              `Le produit "${problematicItem.product.name}"${problematicItem.variant ? ` - ${problematicItem.variant.name}` : ''} n'est plus disponible en quantité suffisante.\n\n` +
-              `Quantité demandée: ${requestedQuantity}\n` +
-              `Stock disponible: ${availableStock}\n\n` +
-              `Veuillez retourner au panier pour ajuster la quantité ou retirer ce produit.`
-            );
-          } else {
-            Alert.alert(
-              "Stock insuffisant",
-              "Un ou plusieurs produits ne sont plus disponibles en quantité suffisante. Veuillez retourner au panier pour ajuster les quantités."
-            );
-          }
-          router.back();
-        } else if (errorData.message === "Le panier n'est pas en brouillon.") {
-          Alert.alert("Erreur", "Ce panier a déjà été validé. Veuillez créer un nouveau panier.");
-          router.push("/produits");
-        } else if (errorData.message === "Le panier est vide.") {
-          Alert.alert("Erreur", "Votre panier est vide. Veuillez ajouter des produits.");
-          router.push("/produits");
-        } else {
-          Alert.alert("Erreur de validation", errorData.message || "Une erreur est survenue lors de la validation du panier");
-        }
-      } else if (error.response?.status === 401) {
-        Alert.alert("Session expirée", "Veuillez vous reconnecter");
-        router.replace("/connexion");
-      } else if (error.response?.status === 404) {
-        Alert.alert("Erreur", "L'endpoint de validation n'est pas disponible. Veuillez réessayer plus tard.");
+      // Ajouter l'adresse sélectionnée ou la nouvelle adresse
+      if (selectedAddressId) {
+        paymentParams.shippingAddressId = selectedAddressId.toString();
+        console.log('Adresse sélectionnée:', selectedAddressId);
       } else {
-        Alert.alert("Erreur", "Une erreur est survenue lors de la validation du panier");
+        // Vérifier que tous les champs requis sont remplis
+        if (!newAddress.recipientName || !newAddress.city || !newAddress.phone) {
+          Alert.alert("Erreur", "Veuillez remplir tous les champs obligatoires de l'adresse");
+          return;
+        }
+
+        paymentParams.newAddress = JSON.stringify({
+          recipientName: newAddress.recipientName,
+          phone: newAddress.phone.trim(),
+          city: newAddress.city,
+          additionalInfo: newAddress.additionalInfo || null,
+          isDefaultShipping: newAddress.isDefaultShipping ? 1 : 0
+        });
+        console.log('Nouvelle adresse:', paymentParams.newAddress);
       }
+
+      // Rediriger vers la page de paiement
+      console.log('Paramètres de redirection:', paymentParams);
+      router.push({
+        pathname: "/paiement",
+        params: paymentParams
+      });
+    } catch (error: any) {
+      console.error("Erreur lors de la redirection vers le paiement:", error);
+      Alert.alert("Erreur", "Une erreur est survenue lors de la redirection vers le paiement");
     } finally {
       setProcessingPayment(false);
     }
@@ -359,6 +312,10 @@ export default function VerificationScreen() {
       
       Alert.alert("Erreur", errorMessage);
     }
+  };
+
+  const handleFocus = (e: any) => {
+    e.target.setAttribute('aria-hidden', 'false');
   };
 
   const renderAddressSection = () => (
@@ -405,12 +362,17 @@ export default function VerificationScreen() {
       </TouchableOpacity>
 
       {showNewAddressForm && (
-        <View style={styles.newAddressForm}>
+        <View 
+          style={styles.newAddressForm}
+          accessibilityViewIsModal={true}
+          importantForAccessibility="yes"
+        >
           <TextInput
             style={styles.input}
             placeholder="Nom du destinataire"
             value={newAddress.recipientName}
             onChangeText={text => setNewAddress({ ...newAddress, recipientName: text })}
+            importantForAccessibility="yes"
           />
           <TextInput
             style={styles.input}

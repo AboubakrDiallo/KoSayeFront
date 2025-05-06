@@ -19,17 +19,83 @@ import { getToken } from "./utils/auth";
 
 type PaymentMethod = 'orange' | 'areeba';
 
+interface PaymentParams {
+  orderId: string;
+  amount: string;
+  paymentMethod: PaymentMethod;
+  phoneNumber: string;
+  cartId: string;
+  recipientName?: string;
+  city?: string;
+  phone?: string;
+  additionalInfo?: string;
+  newAddress?: {
+    recipientName: string;
+    city: string;
+    phone: string;
+    additionalInfo?: string;
+  };
+}
+
+interface Address {
+  id: number;
+  userId: number;
+  recipientName: string;
+  city: string;
+  phone: string | null;
+  additionalInfo: string | null;
+  isDefaultShipping: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export default function PaymentScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{
-    orderId: string;
-    amount: string;
-    paymentMethod: PaymentMethod;
-  }>();
+  const params = useLocalSearchParams();
   const { items, getCartTotal, clearCart } = useCart();
   const { subtotal, discount, shippingFee, total } = getCartTotal();
   const [loading, setLoading] = useState(false);
-  const [phoneNumber, setPhoneNumber] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState(params.phoneNumber as string || "");
+  const [paymentStatus, setPaymentStatus] = useState<"pending" | "success" | "failed">("pending");
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
+  const [newAddress, setNewAddress] = useState<any>(null);
+
+  useEffect(() => {
+    const initializeAddress = async () => {
+      try {
+        // Vérifier si une nouvelle adresse est fournie
+        if (params.newAddress) {
+          const parsedAddress = JSON.parse(params.newAddress as string);
+          setNewAddress(parsedAddress);
+          console.log('Nouvelle adresse reçue:', parsedAddress);
+        }
+
+        // Récupérer les adresses existantes
+        const token = await getToken();
+        if (!token) return;
+
+        const response = await api.get("/addresses", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setAddresses(response.data.data);
+        
+        // Trouver l'adresse sélectionnée
+        if (params.shippingAddressId) {
+          const addressId = Number(params.shippingAddressId);
+          const address = response.data.data.find((addr: Address) => addr.id === addressId);
+          if (address) {
+            setSelectedAddress(address);
+            console.log('Adresse sélectionnée trouvée:', address);
+          }
+        }
+      } catch (error) {
+        console.error("Erreur lors de l'initialisation des adresses:", error);
+      }
+    };
+
+    initializeAddress();
+  }, []); // Suppression de la dépendance à params.newAddress
 
   // État pour le formulaire
   const [formData, setFormData] = useState({
@@ -95,11 +161,6 @@ export default function PaymentScreen() {
   };
 
   const handlePayment = async () => {
-    if (!phoneNumber) {
-      Alert.alert("Erreur", "Veuillez entrer votre numéro de téléphone");
-      return;
-    }
-
     try {
       setLoading(true);
       const token = await getToken();
@@ -110,32 +171,277 @@ export default function PaymentScreen() {
         return;
       }
 
-      const response = await api.post('/payment/process', {
-        orderId: params.orderId,
-        amount: parseFloat(params.amount),
-        paymentMethod: params.paymentMethod,
-        phoneNumber: phoneNumber.trim()
-      }, {
+      if (!phoneNumber) {
+        Alert.alert("Erreur", "Veuillez entrer un numéro de téléphone");
+        setLoading(false);
+        return;
+      }
+
+      // Récupérer l'adresse sélectionnée
+      let shippingAddressId: string | undefined = params.shippingAddressId as string;
+      let selectedAddress = null;
+
+      try {
+        const addressesResponse = await api.get('/addresses', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (shippingAddressId) {
+          // Trouver l'adresse sélectionnée
+          selectedAddress = addressesResponse.data.data.find((addr: any) => addr.id === Number(shippingAddressId));
+          if (!selectedAddress) {
+            Alert.alert("Erreur", "L'adresse sélectionnée n'existe plus");
+            setLoading(false);
+            return;
+          }
+        } else if (newAddress) {
+          // Utiliser la nouvelle adresse
+          shippingAddressId = undefined;
+        } else {
+          // Utiliser l'adresse par défaut
+          selectedAddress = addressesResponse.data.data.find((addr: any) => addr.isDefaultShipping);
+          if (selectedAddress) {
+            shippingAddressId = selectedAddress.id.toString();
+          } else {
+            Alert.alert("Erreur", "Veuillez sélectionner une adresse de livraison");
+            setLoading(false);
+            return;
+          }
+        }
+
+        // Afficher l'adresse sélectionnée
+        console.log('Adresse sélectionnée:', {
+          id: selectedAddress?.id,
+          recipientName: selectedAddress?.recipientName || newAddress?.recipientName,
+          city: selectedAddress?.city || newAddress?.city,
+          phone: selectedAddress?.phone || newAddress?.phone,
+          isDefaultShipping: selectedAddress?.isDefaultShipping
+        });
+
+      } catch (error) {
+        console.error("Erreur lors de la récupération des adresses:", error);
+        Alert.alert("Erreur", "Impossible de récupérer les adresses");
+        setLoading(false);
+        return;
+      }
+
+      // 1. Création de la commande
+      const orderData = {
+        cartId: params.cartId || '',
+        amount: params.amount || '0',
+        paymentMethod: params.paymentMethod || 'orange',
+        status: 'pending',
+        items: items.map(item => ({
+          productId: Number(item.productId),
+          variantId: item.variantId ? Number(item.variantId) : undefined,
+          quantity: Number(item.quantity)
+        })),
+        addressChoice: newAddress ? 'new' : 'existing',
+        shippingAddressId: newAddress ? undefined : shippingAddressId,
+        newAddress: newAddress ? {
+          recipientName: newAddress.recipientName,
+          city: newAddress.city,
+          phone: newAddress.phone,
+          additionalInfo: newAddress.additionalInfo,
+          isDefaultShipping: false
+        } : undefined
+      };
+
+      console.log('Données de la commande:', JSON.stringify(orderData, null, 2));
+
+      // Vérification des paramètres requis pour la commande
+      if (!orderData.cartId || !orderData.amount || !orderData.items || orderData.items.length === 0) {
+        Alert.alert("Erreur", "Paramètres de commande manquants");
+        setLoading(false);
+        return;
+      }
+
+      if (!orderData.shippingAddressId && !orderData.newAddress) {
+        Alert.alert("Erreur", "Veuillez sélectionner une adresse de livraison");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const orderResponse = await api.post('/orders', orderData, {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        console.log('Réponse de la commande:', JSON.stringify(orderResponse.data, null, 2));
+
+        // Vérification de la réponse
+        if (!orderResponse.data) {
+          throw new Error("Pas de réponse du serveur");
+        }
+
+        if (orderResponse.data.status !== 200) {
+          throw new Error(orderResponse.data.message || "Erreur lors de la création de la commande");
+        }
+
+        const order = orderResponse.data.data?.order;
+        if (!order) {
+          throw new Error("Données de la commande manquantes dans la réponse");
+        }
+
+        // 2. Processus de paiement
+        const paymentData = {
+          orderId: order.id,
+          cartId: params.cartId || '',
+          phoneNumber: phoneNumber.trim(),
+          provider: params.paymentMethod || 'orange',
+          amount: order.totalAmount.toString(),
+          shippingAddressId: order.shippingAddressId,
+          reference: order.reference
+        };
+
+        console.log('Données du paiement:', JSON.stringify(paymentData, null, 2));
+
+        try {
+          const paymentResponse = await api.post('/payment/process', paymentData, {
+            headers: { 
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          console.log('Réponse du paiement:', JSON.stringify(paymentResponse.data, null, 2));
+
+          if (!paymentResponse.data) {
+            throw new Error("Pas de réponse du serveur pour le paiement");
+          }
+
+          if (paymentResponse.data.status !== 'success') {
+            throw new Error(paymentResponse.data.message || "Le paiement a échoué");
+          }
+
+          // 3. Vérification du paiement
+          const verifyData = {
+            transactionId: paymentResponse.data.data?.transactionId,
+            orderId: order.id,
+            cartId: params.cartId || ''
+          };
+
+          if (!verifyData.transactionId) {
+            throw new Error("Transaction ID manquant dans la réponse du paiement");
+          }
+
+          console.log('Données de vérification:', JSON.stringify(verifyData, null, 2));
+
+          const verifyResponse = await api.post('/payment/verify', verifyData, {
+            headers: { 
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          console.log('Réponse de vérification:', JSON.stringify(verifyResponse.data, null, 2));
+
+          if (!verifyResponse.data) {
+            throw new Error("Pas de réponse du serveur pour la vérification");
+          }
+
+          if (verifyResponse.data.status !== 'success') {
+            throw new Error(verifyResponse.data.message || "La vérification du paiement a échoué");
+          }
+
+          // Vider le panier après une commande réussie
+          try {
+            const clearCartResponse = await api.delete(`/cart/${params.cartId}`, {
+              headers: { 
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              }
+            });
+
+            console.log('Panier vidé:', JSON.stringify(clearCartResponse.data, null, 2));
+          } catch (clearCartError) {
+            console.error("Erreur lors de la suppression du panier:", clearCartError);
+            // On continue quand même car la commande est réussie
+          }
+
+          // Redirection vers la page de confirmation
+          router.replace({
+            pathname: "/commande-confirmee",
+            params: {
+              orderId: order.id,
+              reference: order.reference,
+              amount: order.totalAmount,
+              paymentMethod: params.paymentMethod,
+              transactionId: paymentResponse.data.data.transactionId
+            }
+          });
+        } catch (paymentError: any) {
+          console.error("Erreur lors du paiement:", paymentError);
+          throw new Error(paymentError.response?.data?.message || paymentError.message || "Erreur lors du paiement");
+        }
+      } catch (error: any) {
+        console.error("Erreur détaillée:", error.response?.data || error);
+        setPaymentStatus('failed');
+        let errorMessage = "Une erreur est survenue lors du paiement";
+        
+        if (error.response?.status === 401) {
+          errorMessage = "Session expirée. Veuillez vous reconnecter.";
+          router.push("/connexion");
+        } else if (error.response?.data?.message) {
+          errorMessage = error.response.data.message;
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
+        Alert.alert("Erreur", errorMessage, [
+          {
+            text: "OK",
+            onPress: () => router.back()
+          }
+        ]);
+      }
+    } catch (error: any) {
+      console.error("Erreur lors du paiement:", error);
+      setPaymentStatus('failed');
+      let errorMessage = "Une erreur est survenue lors du paiement";
+      
+      if (error.response?.status === 401) {
+        errorMessage = "Session expirée. Veuillez vous reconnecter.";
+        router.push("/connexion");
+      } else if (error.response?.data?.message) {
+        errorMessage = errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      Alert.alert("Erreur", errorMessage, [
+        {
+          text: "OK",
+          onPress: () => router.back()
+        }
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    try {
+      setLoading(true);
+      const token = await getToken();
+      
+      if (!token) {
+        Alert.alert("Erreur", "Session expirée. Veuillez vous reconnecter.");
+        router.push("/connexion");
+        return;
+      }
+
+      const response = await api.post(`/api/v1/payment/cancel/${params.cartId}`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      console.log('Réponse du paiement:', response.data);
-
       if (response.data.status === 'success') {
         Alert.alert(
-          "Succès",
-          "Votre paiement a été effectué avec succès",
-          [
-            {
-              text: "OK",
-              onPress: () => router.replace("/(tabs)/accueil")
-            }
-          ]
-        );
-      } else {
-        Alert.alert(
-          "Erreur",
-          "Le paiement a échoué. Veuillez réessayer.",
+          "Annulation",
+          "Le paiement a été annulé",
           [
             {
               text: "OK",
@@ -143,15 +449,14 @@ export default function PaymentScreen() {
             }
           ]
         );
+      } else {
+        throw new Error(response.data.message || "Erreur lors de l'annulation");
       }
     } catch (error: any) {
-      console.error("Erreur lors du paiement:", error);
-      let errorMessage = "Une erreur est survenue lors du paiement";
+      console.error("Erreur lors de l'annulation:", error);
+      let errorMessage = "Une erreur est survenue lors de l'annulation du paiement";
       
-      if (error.response?.status === 401) {
-        errorMessage = "Session expirée. Veuillez vous reconnecter.";
-        router.push("/connexion");
-      } else if (error.response?.data?.message) {
+      if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       }
       
@@ -177,96 +482,6 @@ export default function PaymentScreen() {
       </View>
 
       <ScrollView style={styles.content}>
-        {/* Informations de livraison */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Informations de livraison</Text>
-          <View style={styles.form}>
-            <View style={styles.row}>
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Nom</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.nom}
-                  onChangeText={(text) => handleChange("nom", text)}
-                  placeholder="Entrez votre nom"
-                />
-              </View>
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Prénom</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.prenom}
-                  onChangeText={(text) => handleChange("prenom", text)}
-                  placeholder="Entrez votre prénom"
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Email</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.email}
-                onChangeText={(text) => handleChange("email", text)}
-                placeholder="Entrez votre email"
-                keyboardType="email-address"
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Téléphone</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.telephone}
-                onChangeText={(text) => handleChange("telephone", text)}
-                placeholder="Entrez votre numéro de téléphone"
-                keyboardType="phone-pad"
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Adresse</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.adresse}
-                onChangeText={(text) => handleChange("adresse", text)}
-                placeholder="Entrez votre adresse"
-              />
-            </View>
-
-            <View style={styles.row}>
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Ville</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.ville}
-                  onChangeText={(text) => handleChange("ville", text)}
-                  placeholder="Entrez votre ville"
-                />
-              </View>
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Code postal</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.codePostal}
-                  onChangeText={(text) => handleChange("codePostal", text)}
-                  placeholder="Entrez votre code postal"
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Pays</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.pays}
-                onChangeText={(text) => handleChange("pays", text)}
-                placeholder="Entrez votre pays"
-              />
-            </View>
-          </View>
-        </View>
-
         {/* Récapitulatif de la commande */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Récapitulatif de la commande</Text>
@@ -293,25 +508,107 @@ export default function PaymentScreen() {
             </View>
           </View>
         </View>
-      </ScrollView>
 
-      {/* Bouton de paiement */}
-      <TouchableOpacity 
-        style={[
-          styles.paymentButton,
-          loading && styles.paymentButtonDisabled
-        ]}
-        onPress={handlePayment}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color="#FFF" />
-        ) : (
-          <Text style={styles.paymentButtonText}>
-            Payer avec {params.paymentMethod === 'orange' ? 'Orange Money' : 'Areeba'}
-          </Text>
-        )}
-      </TouchableOpacity>
+        {/* Adresse de livraison */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Adresse de livraison</Text>
+          {selectedAddress ? (
+            <View style={styles.addressCard}>
+              <Text style={styles.addressText}>
+                <Text style={styles.addressLabel}>Nom: </Text>
+                {selectedAddress.recipientName}
+              </Text>
+              <Text style={styles.addressText}>
+                <Text style={styles.addressLabel}>Ville: </Text>
+                {selectedAddress.city}
+              </Text>
+              <Text style={styles.addressText}>
+                <Text style={styles.addressLabel}>Téléphone: </Text>
+                {selectedAddress.phone}
+              </Text>
+              {selectedAddress.additionalInfo && (
+                <Text style={styles.addressText}>
+                  <Text style={styles.addressLabel}>Informations complémentaires: </Text>
+                  {selectedAddress.additionalInfo}
+                </Text>
+              )}
+              {selectedAddress.isDefaultShipping && (
+                <Text style={styles.defaultAddressText}>Adresse par défaut</Text>
+              )}
+            </View>
+          ) : newAddress ? (
+            <View style={styles.addressCard}>
+              <Text style={styles.addressText}>
+                <Text style={styles.addressLabel}>Nom: </Text>
+                {newAddress.recipientName}
+              </Text>
+              <Text style={styles.addressText}>
+                <Text style={styles.addressLabel}>Ville: </Text>
+                {newAddress.city}
+              </Text>
+              <Text style={styles.addressText}>
+                <Text style={styles.addressLabel}>Téléphone: </Text>
+                {newAddress.phone}
+              </Text>
+              {newAddress.additionalInfo && (
+                <Text style={styles.addressText}>
+                  <Text style={styles.addressLabel}>Informations complémentaires: </Text>
+                  {newAddress.additionalInfo}
+                </Text>
+              )}
+              {newAddress.isDefaultShipping === 1 && (
+                <Text style={styles.defaultAddressText}>Adresse par défaut</Text>
+              )}
+            </View>
+          ) : (
+            <Text style={styles.noAddressText}>Aucune adresse sélectionnée</Text>
+          )}
+        </View>
+
+        {/* Informations de paiement */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Informations de paiement</Text>
+          <View style={styles.paymentInfo}>
+            <Text style={styles.paymentInfoText}>
+              Mode de paiement: {params.paymentMethod === 'orange' ? 'Orange Money' : 'Areeba'}
+            </Text>
+            <Text style={styles.paymentInfoText}>
+              Numéro de téléphone: {params.phoneNumber}
+            </Text>
+          </View>
+        </View>
+
+        {/* Numéro de téléphone pour le paiement */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Numéro de téléphone pour le paiement</Text>
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="Entrez votre numéro de téléphone"
+              value={phoneNumber}
+              onChangeText={setPhoneNumber}
+              keyboardType="phone-pad"
+            />
+          </View>
+        </View>
+
+        {/* Bouton de paiement */}
+        <View style={styles.paymentButtonContainer}>
+          <TouchableOpacity 
+            style={styles.paymentButton}
+            onPress={handlePayment}
+            disabled={loading || !phoneNumber}
+          >
+            {loading ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <Text style={styles.paymentButtonText}>
+                Payer {params.amount} €
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -422,19 +719,55 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#000",
   },
-  paymentButton: {
-    backgroundColor: "#F59E0B",
-    margin: 16,
+  paymentButtonContainer: {
     padding: 16,
-    borderRadius: 30,
-    alignItems: "center",
+    backgroundColor: '#fff',
   },
-  paymentButtonDisabled: {
-    opacity: 0.7,
+  paymentButton: {
+    backgroundColor: '#F59E0B',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
   },
   paymentButtonText: {
-    color: "#FFF",
+    color: '#fff',
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: 'bold',
+  },
+  paymentInfo: {
+    backgroundColor: "#F5F5F5",
+    padding: 16,
+    borderRadius: 12,
+  },
+  paymentInfoText: {
+    fontSize: 16,
+    color: "#666",
+    marginBottom: 8,
+  },
+  addressCard: {
+    backgroundColor: "#F5F5F5",
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  addressText: {
+    fontSize: 16,
+    color: "#666",
+    marginBottom: 8,
+  },
+  addressLabel: {
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  defaultAddressText: {
+    fontSize: 14,
+    color: "#F59E0B",
+    marginTop: 4,
+  },
+  noAddressText: {
+    fontSize: 16,
+    color: "#666",
+    textAlign: 'center',
+    padding: 16,
   },
 });

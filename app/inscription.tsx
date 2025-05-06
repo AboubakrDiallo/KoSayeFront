@@ -13,9 +13,10 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import api from "../app/api/api";
+import { useAuth } from "./contexts/AuthContext";
 
 export default function EcranInscription() {
+  const { register } = useAuth();
   const [firstname, setFirstname] = useState("");
   const [lastname, setLastname] = useState("");
   const [email, setEmail] = useState("");
@@ -40,7 +41,6 @@ export default function EcranInscription() {
   };
 
   const handleInscription = async () => {
-    // Validation côté client
     if (!firstname || !lastname || !email || !phone || !adress || !password || !confirmPassword) {
       Alert.alert("Erreur", "Veuillez remplir tous les champs.");
       return;
@@ -68,8 +68,7 @@ export default function EcranInscription() {
 
     setIsLoading(true);
     try {
-      console.log("Envoi de la requête à : /user/register");
-      const response = await api.post("/user/register", {
+      await register({
         firstname,
         lastname,
         email,
@@ -77,23 +76,25 @@ export default function EcranInscription() {
         phone,
         adress,
       });
-
-      console.log("Données de la réponse :", response.data);
-      Alert.alert("Succès", response.data.message || "Inscription réussie ! Veuillez vous connecter.");
+      Alert.alert("Succès", "Inscription réussie !");
       router.replace("/(tabs)/accueil");
-    } catch (error) {
-      console.error("Erreur de connexion avec l'API :", error);
-      let errorMessage = "Erreur lors de l'inscription.";
-      // if (error) {
-      //   // Erreurs renvoyées par le serveur (par exemple, validation)
-      //   errorMessage = error.response.data.message || Object.values(error.response.data.errors || {})
-      //     .flat()
-      //     .join("\n");
-      // } else if (error.request) {
-      //   // Aucune réponse reçue (par exemple, ERR_CONNECTION_REFUSED)
-      //   errorMessage = "Impossible de se connecter au serveur. Vérifiez que le serveur est en cours d'exécution et accessible.";
-      // }
-      Alert.alert("Erreur", errorMessage);
+    } catch (error: any) {
+      console.error("Erreur lors de l'inscription:", error);
+      if (error.message.includes('email est déjà utilisé')) {
+        Alert.alert(
+          "Email déjà utilisé",
+          error.message,
+          [
+            { text: "Annuler", style: "cancel" },
+            { text: "Se connecter", onPress: () => router.push("/connexion") }
+          ]
+        );
+      } else {
+        Alert.alert(
+          "Erreur d'inscription",
+          error.message || "Une erreur est survenue lors de l'inscription"
+        );
+      }
     } finally {
       setIsLoading(false);
     }
@@ -138,6 +139,7 @@ export default function EcranInscription() {
             onChangeText={setEmail}
             keyboardType="email-address"
             autoCapitalize="none"
+            editable={!isLoading}
           />
           <TextInput
             style={styles.input}
@@ -145,6 +147,7 @@ export default function EcranInscription() {
             value={phone}
             onChangeText={setPhone}
             keyboardType="phone-pad"
+            editable={!isLoading}
           />
           <TextInput
             style={styles.input}
@@ -152,6 +155,7 @@ export default function EcranInscription() {
             value={adress}
             onChangeText={setAdress}
             autoCapitalize="sentences"
+            editable={!isLoading}
           />
           <TextInput
             style={styles.input}

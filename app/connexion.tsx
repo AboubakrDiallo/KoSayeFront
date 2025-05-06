@@ -16,7 +16,6 @@ import { router } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import api from "./api/api";
 import { AxiosError } from 'axios'; 
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
 export default function EcranConnexion() {
@@ -52,40 +51,51 @@ export default function EcranConnexion() {
 
     setIsLoading(true);
     try {
-      console.log("Envoi de la requête à : /user/login");
+      console.log("=== DÉBUT CONNEXION ===");
+      console.log("Email:", email);
+      console.log("URL de l'API:", api.defaults.baseURL);
+      
       const response = await api.post("/user/login", {
         email,
         password,
       });
-      const { token } = response.data;
-      if (token) {
-        // Sauvegarder le token complet avec le préfixe Bearer
-        const fullToken = `Bearer ${token.token}`;
-        if (Platform.OS !== "web") {
-          await SecureStore.setItemAsync("authToken", fullToken);
-        } else {
-          localStorage.setItem("authToken", fullToken);
-        }
-        // Sauvegarder aussi dans AsyncStorage pour la gestion du panier
-        await AsyncStorage.setItem("userToken", token.token);
-        console.log("Données de la réponse :", response.data);
-        Alert.alert("Succès", response.data.message || "Connexion réussie !");
-        router.push("/(tabs)/accueil");
-      }
-    } catch (error) {
-      // console.error("Erreur de connexion avec l'API :", error);
       
-      // let errorMessage = "Échec de la connexion. Veuillez réessayer.";
-      // if (error.response) {
-      //   errorMessage = error.response.data.message || Object.values(error.response.data.errors || {})
-      //     .flat()
-      //     .join("\n");
-      // } else if (error.request) {
-      //   errorMessage = "Impossible de se connecter au serveur. Vérifiez que le serveur est en cours d'exécution à http://192.168.1.144:3333.";
-      // } else {
-      //   errorMessage = error.message;
-      // }
-      // Alert.alert("Erreur", errorMessage);
+      console.log("=== RÉPONSE CONNEXION ===");
+      console.log("Message:", response.data.message);
+      console.log("Données:", response.data);
+      
+      if (response.data.token) {
+        const token = response.data.token.token;
+        console.log("Token reçu:", token);
+        
+        if (Platform.OS !== "web") {
+          await SecureStore.setItemAsync("userToken", token);
+          console.log("Token sauvegardé dans SecureStore");
+        } else {
+          localStorage.setItem("userToken", token);
+          console.log("Token sauvegardé dans localStorage");
+        }
+        
+        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        console.log("Token ajouté aux headers de l'API");
+        
+        Alert.alert("Succès", response.data.message || "Connexion réussie !");
+        router.replace("/(tabs)/accueil");
+      }
+    } catch (error: any) {
+      console.error("=== ERREUR DE CONNEXION ===");
+      console.error("Message:", error.message);
+      console.error("Réponse API:", error.response?.data);
+      
+      let errorMessage = "Échec de la connexion. Veuillez réessayer.";
+      if (error.response) {
+        errorMessage = error.response.data.message || Object.values(error.response.data.errors || {})
+          .flat()
+          .join("\n");
+      } else if (error.request) {
+        errorMessage = "Impossible de se connecter au serveur. Vérifiez que le serveur est en cours d'exécution.";
+      }
+      Alert.alert("Erreur", errorMessage);
     } finally {
       setIsLoading(false);
     }
