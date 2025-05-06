@@ -51,6 +51,11 @@ interface Product {
     stock: number;
     image?: string;
   }[];
+  properties?: {
+    id: number;
+    name: string;
+    value: string;
+  }[];
 }
 
 interface Variant {
@@ -96,7 +101,7 @@ const useAuthToken = () => {
   return { getToken };
 };
 
-export default function ProductDetailScreen() {
+const ProductDetail = () => {
   const params = useLocalSearchParams();
   const productId = parseInt(params.productId as string);
   const [product, setProduct] = useState<Product | null>(null);
@@ -487,229 +492,217 @@ export default function ProductDetailScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView>
-        <Image 
-          source={{ uri: product?.image || "https://placehold.co/300x300" }} 
-          style={styles.productImage} 
-        />
-        
-        <View style={styles.productInfo}>
-          <View style={styles.headerContainer}>
-            <Text style={styles.productName}>{product?.name}</Text>
-            <TouchableOpacity onPress={toggleFavorite}>
-              <Ionicons 
-                name={isFavorite ? "heart" : "heart-outline"} 
-                size={24} 
-                color={isFavorite ? "red" : "black"} 
-              />
-            </TouchableOpacity>
-      </View>
-      
-          {product?.category && (
-            <View style={styles.propertyContainer}>
-              <Text style={styles.propertyLabel}>Catégorie:</Text>
-              <Text style={styles.propertyValue}>{product.category.name}</Text>
-            </View>
-          )}
-          
-          <Text style={styles.productPrice}>
-            {selectedVariant ? selectedVariant.price : product?.price} €
-          </Text>
+        <View style={styles.imageContainer}>
+          <Image
+            source={{ uri: product?.image }}
+            style={styles.productImage}
+            resizeMode="cover"
+          />
+          <TouchableOpacity 
+            style={styles.favoriteButton}
+            onPress={toggleFavorite}
+          >
+            <Ionicons 
+              name={isFavorite ? "heart" : "heart-outline"} 
+              size={28} 
+              color={isFavorite ? "#FF3B30" : "#000"} 
+            />
+          </TouchableOpacity>
+        </View>
 
-          <View style={styles.stockContainer}>
-            <Text style={styles.stockLabel}>Stock disponible:</Text>
-            <Text style={styles.stockValue}>
-              {selectedVariant ? selectedVariant.stock : product?.stock} unités
-            </Text>
+        <View style={styles.infoContainer}>
+          <Text style={styles.productName}>{product?.name}</Text>
+          <Text style={styles.productPrice}>{product?.price} €</Text>
+          
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Description</Text>
+            <Text style={styles.description}>{product?.description}</Text>
           </View>
-          
-          {product?.description && (
-            <View style={styles.descriptionContainer}>
-              <Text style={styles.sectionTitle}>Description</Text>
-              <Text style={styles.description}>{product.description}</Text>
-            </View>
-          )}
 
-          {product?.propertyValues && product.propertyValues.length > 0 && (
-            <View style={styles.propertiesContainer}>
-              <Text style={styles.sectionTitle}>Caractéristiques</Text>
-              {product.propertyValues.map((propertyValue) => (
-                <View key={propertyValue.id} style={styles.propertyRow}>
-                  <Text style={styles.propertyLabel}>{propertyValue.property.name}:</Text>
-                  <Text style={styles.propertyValue}>{propertyValue.value}</Text>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Caractéristiques</Text>
+            <View style={styles.specsContainer}>
+              {product?.propertyValues?.map((prop, index) => (
+                <View key={index} style={styles.specRow}>
+                  <Text style={styles.specLabel}>{prop.property.name}:</Text>
+                  <Text style={styles.specValue}>{prop.value}</Text>
                 </View>
               ))}
             </View>
-          )}
+          </View>
 
-          {product?.variants && product.variants.length > 0 && (
-            <View style={styles.variantsContainer}>
-              <Text style={styles.sectionTitle}>Variantes disponibles</Text>
-              <View style={styles.variantsList}>
-                {product.variants.map((variant) => (
-                  <TouchableOpacity
-                    key={variant.id}
-                    style={[
-                      styles.variantButton,
-                      selectedVariant?.id === variant.id && styles.selectedVariant
-                    ]}
-                    onPress={() => setSelectedVariant(variant)}
-                  >
-                    <Text style={styles.variantName}>{variant.name}</Text>
-                    <Text style={styles.variantPrice}>{variant.price} €</Text>
-                    <Text style={styles.variantStock}>{variant.stock} en stock</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <TouchableOpacity
-                style={styles.clearVariantButton}
-                onPress={() => setSelectedVariant(null)}
-              >
-                <Text style={styles.clearVariantText}>Sélectionner le produit de base</Text>
-              </TouchableOpacity>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Variantes disponibles</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {product?.variants?.map((variant, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.variantCard,
+                    selectedVariant?.id === variant.id && styles.selectedVariant
+                  ]}
+                  onPress={() => setSelectedVariant(variant)}
+                >
+                  <Text style={styles.variantName}>{variant.name}</Text>
+                  <Text style={styles.variantPrice}>{variant.price} €</Text>
+                  <Text style={styles.variantStock}>
+                    En stock: {variant.stock}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Informations supplémentaires</Text>
+            <View style={styles.infoRow}>
+              <Ionicons name="cube-outline" size={20} color="#666" />
+              <Text style={styles.infoText}>
+                Catégorie: {product?.category?.name}
+              </Text>
             </View>
-          )}
-
-          <View style={styles.quantityContainer}>
-            <Text style={styles.sectionTitle}>Quantité</Text>
-            <View style={styles.quantityControls}>
-              <TouchableOpacity
-                style={styles.quantityButton}
-                onPress={() => setQuantity(Math.max(1, quantity - 1))}
-              >
-                <Ionicons name="remove" size={20} color="black" />
-              </TouchableOpacity>
-              <Text style={styles.quantityText}>{quantity}</Text>
-              <TouchableOpacity
-                style={styles.quantityButton}
-                onPress={() => setQuantity(quantity + 1)}
-              >
-                <Ionicons name="add" size={20} color="black" />
-              </TouchableOpacity>
+            <View style={styles.infoRow}>
+              <Ionicons name="checkmark-circle-outline" size={20} color="#666" />
+              <Text style={styles.infoText}>
+                Statut: {product?.stock > 0 ? 'En stock' : 'Rupture de stock'}
+              </Text>
             </View>
           </View>
         </View>
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={styles.actionContainer}>
         <TouchableOpacity
           style={styles.addToCartButton}
           onPress={handleAddToCart}
+          disabled={!selectedVariant || selectedVariant.stock === 0}
         >
-          <Text style={styles.addToCartText}>
-            {selectedVariant 
-              ? "Ajouter la variante au panier" 
-              : "Ajouter le produit au panier"
-            }
+          <Text style={styles.buttonText}>
+            {selectedVariant?.stock === 0 ? 'Rupture de stock' : 'Ajouter au panier'}
           </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: '#fff',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
-  productImage: {
-    width: "100%",
+  imageContainer: {
+    width: '100%',
     height: 300,
-    backgroundColor: "#f5f5f5",
   },
-  productInfo: {
+  productImage: {
+    width: '100%',
+    height: '100%',
+  },
+  infoContainer: {
     padding: 16,
-  },
-  headerContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
   },
   productName: {
     fontSize: 24,
-    fontWeight: "bold",
-    flex: 1,
+    fontWeight: 'bold',
+    marginBottom: 8,
   },
   productPrice: {
-    fontSize: 20,
-    color: "#666",
-    fontWeight: "bold",
+    fontSize: 22,
+    color: '#F59E0B',
+    fontWeight: '600',
     marginBottom: 16,
   },
-  descriptionContainer: {
-    marginBottom: 16,
+  section: {
+    marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: "600",
-    marginBottom: 8,
+    fontWeight: '600',
+    marginBottom: 12,
   },
   description: {
     fontSize: 16,
-    color: "#666",
+    color: '#666',
     lineHeight: 24,
   },
-  variantsContainer: {
-    marginBottom: 16,
-  },
-  variantsList: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  variantButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: "#ddd",
+  specsContainer: {
+    backgroundColor: '#F5F5F5',
+    padding: 16,
     borderRadius: 8,
+  },
+  specRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  specLabel: {
+    fontSize: 16,
+    color: '#666',
+  },
+  specValue: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  variantCard: {
+    backgroundColor: '#F5F5F5',
+    padding: 16,
+    borderRadius: 8,
+    marginRight: 12,
+    width: 200,
   },
   selectedVariant: {
-    backgroundColor: "#F59E0B",
-    borderColor: "#F59E0B",
+    backgroundColor: '#FEF3C7',
+    borderWidth: 2,
+    borderColor: '#F59E0B',
   },
-  quantityContainer: {
-    marginBottom: 16,
+  variantName: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 4,
   },
-  quantityControls: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
+  variantPrice: {
+    fontSize: 16,
+    color: '#F59E0B',
+    marginBottom: 4,
   },
-  quantityButton: {
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
+  variantStock: {
+    fontSize: 14,
+    color: '#666',
   },
-  quantityText: {
-    fontSize: 18,
-    fontWeight: "bold",
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
   },
-  footer: {
+  infoText: {
+    fontSize: 16,
+    color: '#666',
+    marginLeft: 8,
+  },
+  actionContainer: {
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: "#eee",
+    borderTopColor: '#E0E0E0',
+    backgroundColor: '#fff',
   },
   addToCartButton: {
-    backgroundColor: "#F59E0B",
+    backgroundColor: '#F59E0B',
     padding: 16,
     borderRadius: 8,
-    alignItems: "center",
+    alignItems: 'center',
   },
-  addToCartText: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "bold",
+  buttonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
   },
   errorContainer: {
     flex: 1,
@@ -734,72 +727,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
   },
-  propertiesContainer: {
-    marginBottom: 16,
-    backgroundColor: "#f9f9f9",
-    borderRadius: 8,
-    padding: 12,
-  },
-  propertyRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-  },
-  propertyLabel: {
-    fontWeight: "600",
-    color: "#666",
-    flex: 1,
-  },
-  propertyValue: {
-    color: "#333",
-    flex: 2,
-    textAlign: "right",
-  },
-  propertyContainer: {
-    flexDirection: "row",
-    marginBottom: 8,
-  },
-  stockContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 16,
+  favoriteButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 20,
     padding: 8,
-    backgroundColor: "#f0f0f0",
-    borderRadius: 8,
-  },
-  stockLabel: {
-    fontWeight: "600",
-    color: "#666",
-    marginRight: 8,
-  },
-  stockValue: {
-    color: "#333",
-    fontWeight: "bold",
-  },
-  variantName: {
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  variantPrice: {
-    color: "#F59E0B",
-    fontWeight: "bold",
-    marginBottom: 4,
-  },
-  variantStock: {
-    fontSize: 12,
-    color: "#666",
-  },
-  clearVariantButton: {
-    marginTop: 10,
-    padding: 10,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  clearVariantText: {
-    color: '#666',
-    fontSize: 14,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
 });
+
+export default ProductDetail;
