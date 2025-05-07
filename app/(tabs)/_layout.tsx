@@ -42,20 +42,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="recherche" // Nom du fichier -> app/(tabs)/recherche.tsx
-        options={{
-          title: "Recherche",
-          tabBarShowLabel: false,
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name="search"
-              size={size}
-              color={focused ? TINT_COLOR : "gray"}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="panier" // Nom du fichier -> app/(tabs)/panier.tsx
         options={{
           title: "Panier",

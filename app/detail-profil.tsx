@@ -10,30 +10,37 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useProfile } from "../contexts/ProfileContext";
 import * as ImagePicker from "expo-image-picker";
+import { useAuth } from "./contexts/AuthContext";
+import api from "./api/api";
+import { getToken } from "./utils/auth";
 
 export default function DetailProfilScreen() {
   const router = useRouter();
-  const [isEditing, setIsEditing] = useState(false);
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(false);
   const { profileImage, setProfileImage } = useProfile();
-  const [userInfo, setUserInfo] = useState({
-    firstName: "Aboubacar",
-    lastName: "Diallo",
-    email: "aladji.diallo.7509@gmail.com",
-    phone: "+221 77 123 45 67",
-    address: "123 Rue Principale, Dakar",
-    birthDate: "15/03/1995",
+  const [formData, setFormData] = useState({
+    firstname: user?.firstname || "",
+    lastname: user?.lastname || "",
+    email: user?.email || "",
+    phone: user?.phone || "",
+    adress: user?.adress || "",
   });
+  const [selectedImage, setSelectedImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      alert(
-        "Désolé, nous avons besoin de la permission d'accéder à votre galerie pour changer la photo de profil."
+      Alert.alert(
+        "Permission refusée",
+        "Nous avons besoin de la permission d'accéder à votre galerie pour changer la photo de profil."
       );
       return;
     }
@@ -42,44 +49,87 @@ export default function DetailProfilScreen() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 1,
+      quality: 0.8,
     });
 
     if (!result.canceled) {
+      setSelectedImage(result.assets[0]);
       setProfileImage(result.assets[0].uri);
     }
   };
 
-  const handleSave = () => {
-    setIsEditing(false);
-    console.log("Saving profile changes:", userInfo);
+  const handleChange = (field: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  interface InfoFieldProps {
-    label: string;
-    value: string;
-    field: keyof typeof userInfo;
-  }
+  const handleSubmit = async () => {
+    try {
+      setLoading(true);
+      const token = await getToken();
+      if (!token) {
+        Alert.alert("Erreur", "Session expirée. Veuillez vous reconnecter.");
+        router.push("/connexion");
+        return;
+      }
 
-  const InfoField: React.FC<InfoFieldProps> = ({ label, value, field }) => {
+      // Create FormData for multipart/form-data
+      const formDataToSend = new FormData();
+      
+      // Add profile data
+      Object.entries(formData).forEach(([key, value]) => {
+        formDataToSend.append(key, value);
+      });
+
+      // Add image if selected
+      if (selectedImage) {
+        const imageUri = selectedImage.uri;
+        const imageName = imageUri.split('/').pop() || 'profile.jpg';
+        const imageType = selectedImage.type || 'image/jpeg';
+        
+        formDataToSend.append('profilePicture', {
+          uri: imageUri,
+          type: imageType,
+          name: imageName,
+        } as any);
+      }
+
+      const response = await api.put(
+        "/user/profile",
+        formDataToSend,
+        {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data',
+          }
+        }
+      );
+
+      if (response.data.success) {
+        Alert.alert("Succès", "Profil mis à jour avec succès");
+        router.back();
+      } else {
+        throw new Error(response.data.message || "Erreur lors de la mise à jour du profil");
+      }
+    } catch (error: any) {
+      console.error("Erreur lors de la mise à jour du profil:", error);
+      Alert.alert(
+        "Erreur",
+        error.response?.data?.message || "Une erreur est survenue lors de la mise à jour du profil"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!user) {
     return (
-      <View style={styles.fieldContainer}>
-        <Text style={styles.fieldLabel}>{label}</Text>
-        {isEditing ? (
-          <TextInput
-            style={styles.input}
-            value={value}
-            onChangeText={(text) =>
-              setUserInfo((prev) => ({ ...prev, [field]: text }))
-            }
-            keyboardType={field === "phone" ? "phone-pad" : "default"}
-          />
-        ) : (
-          <Text style={styles.fieldValue}>{value}</Text>
-        )}
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text>Chargement...</Text>
+        </View>
+      </SafeAreaView>
     );
-  };
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -90,85 +140,97 @@ export default function DetailProfilScreen() {
         >
           <Ionicons name="arrow-back" size={24} color="black" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Mon Profil</Text>
-        <TouchableOpacity
-          onPress={() => (isEditing ? handleSave() : setIsEditing(true))}
-          style={styles.editButton}
-        >
-          <Text style={styles.editButtonText}>
-            {isEditing ? "Enregistrer" : "Modifier"}
-          </Text>
-        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Modifier le profil</Text>
+        <View style={styles.menuButton} />
       </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardAvoiding}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
-      >
-        <ScrollView
-          style={styles.scrollView}
-          keyboardShouldPersistTaps="always"
-        >
-          <View style={styles.profileImageSection}>
-            <Image source={{ uri: profileImage }} style={styles.profileImage} />
-            {isEditing && (
-              <TouchableOpacity
-                style={styles.changePhotoButton}
-                onPress={pickImage}
-              >
-                <Text style={styles.changePhotoText}>Changer la photo</Text>
-              </TouchableOpacity>
+      <ScrollView style={styles.content}>
+        <View style={styles.profileImageContainer}>
+          <TouchableOpacity onPress={pickImage}>
+            {profileImage ? (
+              <Image source={{ uri: profileImage }} style={styles.profileImage} />
+            ) : (
+              <View style={styles.profileImageFallback}>
+                <Text style={styles.profileImageFallbackText}>
+                  {user.firstname.charAt(0).toUpperCase()}
+                </Text>
+              </View>
             )}
-          </View>
-
-          <View style={styles.infoSection}>
-            <Text style={styles.sectionTitle}>Informations Personnelles</Text>
-            <View style={styles.infoContainer}>
-              <InfoField
-                label="Prénom"
-                value={userInfo.firstName}
-                field="firstName"
-              />
-              <InfoField
-                label="Nom"
-                value={userInfo.lastName}
-                field="lastName"
-              />
-              <InfoField label="Email" value={userInfo.email} field="email" />
-              <InfoField
-                label="Téléphone"
-                value={userInfo.phone}
-                field="phone"
-              />
-              <InfoField
-                label="Adresse"
-                value={userInfo.address}
-                field="address"
-              />
-              <InfoField
-                label="Date de naissance"
-                value={userInfo.birthDate}
-                field="birthDate"
-              />
+            <View style={styles.imageOverlay}>
+              <Ionicons name="camera" size={24} color="#FFF" />
             </View>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.form}>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Prénom</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.firstname}
+              onChangeText={(value) => handleChange("firstname", value)}
+              placeholder="Entrez votre prénom"
+            />
           </View>
 
-          <View style={styles.securitySection}>
-            <Text style={styles.sectionTitle}>Sécurité</Text>
-            <TouchableOpacity
-              style={styles.securityButton}
-              onPress={() => router.push("/changer_mot_de_passe")}
-            >
-              <Ionicons name="lock-closed" size={24} color="#F59E0B" />
-              <Text style={styles.securityButtonText}>
-                Changer le mot de passe
-              </Text>
-              <Ionicons name="chevron-forward" size={24} color="#000" />
-            </TouchableOpacity>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Nom</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.lastname}
+              onChangeText={(value) => handleChange("lastname", value)}
+              placeholder="Entrez votre nom"
+            />
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.email}
+              onChangeText={(value) => handleChange("email", value)}
+              placeholder="Entrez votre email"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Téléphone</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.phone}
+              onChangeText={(value) => handleChange("phone", value)}
+              placeholder="Entrez votre numéro de téléphone"
+              keyboardType="phone-pad"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Adresse</Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              value={formData.adress}
+              onChangeText={(value) => handleChange("adress", value)}
+              placeholder="Entrez votre adresse"
+              multiline
+              numberOfLines={3}
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+            onPress={handleSubmit}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <Text style={styles.submitButtonText}>Enregistrer les modifications</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -178,8 +240,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#fff",
   },
-  keyboardAvoiding: {
+  loadingContainer: {
     flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
   header: {
     flexDirection: "row",
@@ -191,91 +255,96 @@ const styles = StyleSheet.create({
     borderBottomColor: "#F0F0F0",
   },
   backButton: {
-    padding: 8,
+    width: 40,
+    height: 40,
     borderRadius: 20,
     backgroundColor: "#F5F5F5",
+    justifyContent: "center",
+    alignItems: "center",
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: "600",
+    color: "#000",
   },
-  editButton: {
-    padding: 8,
+  menuButton: {
+    width: 40,
+    height: 40,
   },
-  editButtonText: {
-    color: "#F59E0B",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  scrollView: {
+  content: {
     flex: 1,
+    padding: 16,
   },
-  profileImageSection: {
+  profileImageContainer: {
     alignItems: "center",
-    padding: 20,
+    marginBottom: 24,
   },
   profileImage: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    marginBottom: 16,
   },
-  changePhotoButton: {
-    padding: 8,
+  profileImageFallback: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "#F59E0B",
+    justifyContent: "center",
+    alignItems: "center",
   },
-  changePhotoText: {
-    color: "#F59E0B",
-    fontSize: 16,
+  profileImageFallbackText: {
+    fontSize: 48,
+    color: "#FFFFFF",
+    fontWeight: "bold",
   },
-  infoSection: {
-    padding: 16,
+  imageOverlay: {
+    position: "absolute",
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    marginBottom: 16,
-    color: "#000",
-  },
-  infoContainer: {
+  form: {
     backgroundColor: "#F5F5F5",
-    borderRadius: 12,
     padding: 16,
-    gap: 16,
+    borderRadius: 12,
   },
-  fieldContainer: {
-    gap: 8,
+  inputGroup: {
+    marginBottom: 16,
   },
-  fieldLabel: {
+  label: {
     fontSize: 14,
     color: "#666",
-  },
-  fieldValue: {
-    fontSize: 16,
-    color: "#000",
+    marginBottom: 8,
   },
   input: {
-    fontSize: 16,
-    color: "#000",
     backgroundColor: "#fff",
-    padding: 8,
+    padding: 12,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#E5E5E5",
-  },
-  securitySection: {
-    padding: 16,
-  },
-  securityButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F5F5F5",
-    padding: 16,
-    borderRadius: 12,
-  },
-  securityButtonText: {
-    flex: 1,
     fontSize: 16,
     color: "#000",
-    marginLeft: 12,
+  },
+  textArea: {
+    height: 100,
+    textAlignVertical: "top",
+  },
+  submitButton: {
+    backgroundColor: "#F59E0B",
+    padding: 16,
+    borderRadius: 8,
+    alignItems: "center",
+    marginTop: 16,
+  },
+  submitButtonDisabled: {
+    opacity: 0.7,
+  },
+  submitButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });

@@ -254,9 +254,13 @@ export default function CartScreen() {
       }
 
       const item = cart?.items.find(i => i.id === itemId);
-      if (!item) return;
+      if (!item) {
+        console.log("Item non trouvé dans le panier:", itemId);
+        return;
+      }
 
       const newQuantity = increment ? item.quantity + 1 : item.quantity - 1;
+      console.log("Nouvelle quantité calculée:", newQuantity);
       
       if (newQuantity === 0) {
         await handleRemoveItem(itemId);
@@ -280,14 +284,28 @@ export default function CartScreen() {
       const endpoint = increment 
         ? `/cart/${cart?.id}/items/${itemId}/increment`
         : `/cart/${cart?.id}/items/${itemId}/decrement`;
-      
-      await api.patch(endpoint, {}, {
+
+      console.log("Appel API avec l'endpoint:", endpoint);
+      console.log("Données du panier:", {
+        cartId: cart?.id,
+        itemId,
+        currentQuantity: item.quantity,
+        newQuantity
+      });
+
+      const response = await api.patch(endpoint, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
+      console.log("Réponse de l'API:", response.data);
+
       await fetchCart();
     } catch (error: any) {
-      console.error("Erreur lors de la mise à jour de la quantité:", error);
+      console.error("Erreur détaillée lors de la mise à jour de la quantité:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
       Alert.alert("Erreur", "Impossible de mettre à jour la quantité");
     } finally {
       setProcessing(false);
@@ -413,7 +431,9 @@ export default function CartScreen() {
         <Text style={styles.summaryTitle}>Récapitulatif de la commande</Text>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Articles</Text>
-          <Text style={styles.summaryValue}>{cart.items.length}</Text>
+          <Text style={styles.summaryValue}>
+            {cart.items.reduce((total, item) => total + item.quantity, 0)} articles
+          </Text>
         </View>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Sous-total</Text>

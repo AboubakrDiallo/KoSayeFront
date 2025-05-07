@@ -10,6 +10,7 @@ interface User {
   email: string;
   phone: string;
   adress: string;
+  profilePicture: string | null;
 }
 
 interface AuthContextType {
@@ -25,6 +26,7 @@ interface AuthContextType {
     phone: string;
     adress: string;
   }) => Promise<void>;
+  updateUser: (userData: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -90,7 +92,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           lastname: userResponse.data.data.lastname,
           email: userResponse.data.data.email,
           phone: userResponse.data.data.phone,
-          adress: userResponse.data.data.adress
+          adress: userResponse.data.data.adress,
+          profilePicture: userResponse.data.data.profilePicture
         };
         
         console.log('=== DONNÉES UTILISATEUR FINALES ===');
@@ -166,7 +169,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             lastname: userResponse.data.data.lastname,
             email: userResponse.data.data.email,
             phone: userResponse.data.data.phone,
-            adress: userResponse.data.data.adress
+            adress: userResponse.data.data.adress,
+            profilePicture: userResponse.data.data.profilePicture
           });
           
           router.replace("/(tabs)/accueil");
@@ -209,8 +213,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateUser = (userData: Partial<User>) => {
+    setUser(prev => prev ? { ...prev, ...userData } : null);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, register }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, register, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

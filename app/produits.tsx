@@ -12,6 +12,7 @@ import {
   TextInput,
   ScrollView,
   Alert,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -29,6 +30,10 @@ interface Product {
   sizes?: string[];
   availableSizes?: string[];
   variants?: Variant[];
+  category?: {
+    id: number;
+    name: string;
+  };
 }
 
 interface Variant {
@@ -37,6 +42,20 @@ interface Variant {
   price: number;
   stock: number;
   image?: string;
+}
+
+interface Property {
+  id: string;
+  name: string;
+  value: string;
+}
+
+interface FilterState {
+  categoryId: string | null;
+  minPrice: string;
+  maxPrice: string;
+  search: string;
+  stockStatus: string | null;
 }
 
 const { width } = Dimensions.get("window");
@@ -56,6 +75,17 @@ export default function ProductsScreen() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [filters, setFilters] = useState<FilterState>({
+    categoryId: null,
+    minPrice: '',
+    maxPrice: '',
+    search: '',
+    stockStatus: null
+  });
+  const [priceModalVisible, setPriceModalVisible] = useState(false);
+  const [tempMinPrice, setTempMinPrice] = useState('');
+  const [tempMaxPrice, setTempMaxPrice] = useState('');
 
   const fetchProducts = async (pageNum: number = 1, shouldRefresh: boolean = false) => {
     try {
@@ -68,8 +98,11 @@ export default function ProductsScreen() {
       const params = new URLSearchParams({
         page: pageNum.toString(),
         limit: '10',
-        ...(selectedCategory && { category_id: selectedCategory }),
-        ...(searchQuery && { search: searchQuery }),
+        ...(filters.categoryId && { category_id: filters.categoryId }),
+        ...(filters.minPrice && { min_price: filters.minPrice }),
+        ...(filters.maxPrice && { max_price: filters.maxPrice }),
+        ...(filters.search && { search: filters.search }),
+        ...(filters.stockStatus && { stock_status: filters.stockStatus })
       });
 
       const response = await api.get(`/products?${params}`);
@@ -92,6 +125,13 @@ export default function ProductsScreen() {
     }
   };
 
+  const handleFilterChange = (newFilters: Partial<FilterState>) => {
+    setFilters(prev => ({ ...prev, ...newFilters }));
+    setPage(1);
+    setProducts([]);
+    fetchProducts(1, true);
+  };
+
   useEffect(() => {
     fetchProducts(1, true);
   }, [selectedCategory, searchQuery]);
@@ -109,7 +149,7 @@ export default function ProductsScreen() {
     // Filtrage par catégorie
     if (selectedCategory) {
       filtered = filtered.filter(product =>
-        product.brand === selectedCategory
+        product.category?.name === selectedCategory
       );
     }
 
@@ -222,13 +262,45 @@ export default function ProductsScreen() {
 
   const handleAddToCart = async (product: Product) => {
     try {
+      console.log('=== DÉBUT AJOUT AU PANIER ===');
+      console.log('Produit à ajouter:', product);
+
+      const token = await getToken();
+      if (!token) {
+        console.log('Aucun token trouvé, redirection vers connexion');
+        Alert.alert("Erreur", "Vous devez être connecté pour ajouter au panier");
+        router.push("/connexion");
+        return;
+      }
+
       // Récupérer le panier actif ou en créer un
-      let cartResponse = await api.get("/cart/active");
-      let cart = cartResponse.data.data;
+      console.log('Récupération du panier actif');
+      let cartResponse;
+      try {
+        cartResponse = await api.get("/cart/active", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        console.log('Réponse panier actif:', cartResponse.data);
+      } catch (error) {
+        console.log('Erreur récupération panier actif:', error);
+        cartResponse = null;
+      }
+
+      let cart = cartResponse?.data?.data;
 
       if (!cart) {
-        cartResponse = await api.post("/cart", { status: "draft" });
-        cart = cartResponse.data.data;
+        console.log('Création d\'un nouveau panier');
+        try {
+          cartResponse = await api.post("/cart", 
+            { status: "draft" },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          cart = cartResponse.data.data;
+          console.log('Nouveau panier créé:', cart);
+        } catch (error) {
+          console.error('Erreur création panier:', error);
+          throw new Error('Impossible de créer un nouveau panier');
+        }
       }
 
       // Préparer les données pour l'ajout au panier
@@ -242,7 +314,12 @@ export default function ProductsScreen() {
       console.log('Données envoyées au panier:', cartItemData);
 
       // Ajouter le produit au panier
-      const response = await api.post('/cart-items', cartItemData);
+      const response = await api.post('/cart-items', cartItemData, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
       console.log('Réponse ajout au panier:', response.data);
 
       Alert.alert(
@@ -265,11 +342,17 @@ export default function ProductsScreen() {
         ]
       );
     } catch (error: any) {
-      console.error('Erreur lors de l\'ajout au panier:', error);
-      console.log('Détails de l\'erreur:', error.response?.data);
+      console.error('=== ERREUR AJOUT AU PANIER ===', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
       
       let errorMessage = 'Impossible d\'ajouter le produit au panier';
-      if (error.response?.data?.message) {
+      if (error.response?.status === 401) {
+        errorMessage = "Session expirée. Veuillez vous reconnecter.";
+        router.push("/connexion");
+      } else if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       }
       
@@ -279,34 +362,149 @@ export default function ProductsScreen() {
 
   const categories = Array.from(new Set(products.map(p => p.brand || "").filter(Boolean)));
 
-  const renderCategoryFilter = () => (
-    <ScrollView 
-      horizontal 
-      showsHorizontalScrollIndicator={false}
-      style={styles.categoryContainer}
-    >
-      <TouchableOpacity
-        style={[
-          styles.categoryButton,
-          !selectedCategory && styles.selectedCategory
-        ]}
-        onPress={() => setSelectedCategory(null)}
-      >
-        <Text>Tous</Text>
-      </TouchableOpacity>
-      {categories.map(category => (
+  const renderCategoryFilter = () => {
+    const uniqueCategories = Array.from(
+      new Set(products.map(p => p.category?.name).filter((name): name is string => name !== undefined))
+    );
+
+    return (
+      <View style={styles.filterContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <TouchableOpacity
+            style={[
+              styles.filterChip,
+              !selectedCategory && styles.filterChipActive,
+            ]}
+            onPress={() => setSelectedCategory(null)}
+          >
+            <Text style={styles.filterChipText}>Tous</Text>
+          </TouchableOpacity>
+          {uniqueCategories.map((category) => (
+            <TouchableOpacity
+              key={category}
+              style={[
+                styles.filterChip,
+                selectedCategory === category && styles.filterChipActive,
+              ]}
+              onPress={() => setSelectedCategory(category)}
+            >
+              <Text style={styles.filterChipText}>{category}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+    );
+  };
+
+  const renderAdvancedFilters = () => (
+    <View style={styles.filterSection}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        {/* Filtre par prix */}
         <TouchableOpacity
-          key={category}
           style={[
-            styles.categoryButton,
-            selectedCategory === category && styles.selectedCategory
+            styles.filterChip,
+            (filters.minPrice || filters.maxPrice) && styles.filterChipActive
           ]}
-          onPress={() => setSelectedCategory(category)}
+          onPress={() => setPriceModalVisible(true)}
         >
-          <Text>{category}</Text>
+          <Text style={styles.filterChipText}>
+            {filters.minPrice || filters.maxPrice ? 
+              `${filters.minPrice || '0'}€ - ${filters.maxPrice || '∞'}€` : 
+              'Prix'}
+          </Text>
         </TouchableOpacity>
-      ))}
-    </ScrollView>
+
+        {/* Filtre par stock */}
+        <TouchableOpacity
+          style={[
+            styles.filterChip,
+            filters.stockStatus && styles.filterChipActive
+          ]}
+          onPress={() => {
+            Alert.alert(
+              'Disponibilité',
+              'Sélectionnez le statut',
+              [
+                {
+                  text: 'En stock',
+                  onPress: () => handleFilterChange({ stockStatus: 'in_stock' })
+                },
+                {
+                  text: 'Rupture de stock',
+                  onPress: () => handleFilterChange({ stockStatus: 'out_of_stock' })
+                },
+                {
+                  text: 'Tous',
+                  onPress: () => handleFilterChange({ stockStatus: null })
+                }
+              ]
+            );
+          }}
+        >
+          <Text style={styles.filterChipText}>
+            {filters.stockStatus === 'in_stock' ? 'En stock' :
+             filters.stockStatus === 'out_of_stock' ? 'Rupture de stock' :
+             'Disponibilité'}
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
+
+      {/* Modal pour la saisie des prix */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={priceModalVisible}
+        onRequestClose={() => setPriceModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Filtrer par prix</Text>
+            
+            <TextInput
+              style={styles.input}
+              placeholder="Prix minimum"
+              keyboardType="numeric"
+              value={tempMinPrice}
+              onChangeText={setTempMinPrice}
+            />
+            
+            <TextInput
+              style={styles.input}
+              placeholder="Prix maximum"
+              keyboardType="numeric"
+              value={tempMaxPrice}
+              onChangeText={setTempMaxPrice}
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setPriceModalVisible(false);
+                  setTempMinPrice('');
+                  setTempMaxPrice('');
+                }}
+              >
+                <Text style={styles.buttonText}>Annuler</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, styles.applyButton]}
+                onPress={() => {
+                  handleFilterChange({
+                    minPrice: tempMinPrice,
+                    maxPrice: tempMaxPrice
+                  });
+                  setPriceModalVisible(false);
+                }}
+              >
+                <Text style={styles.buttonText}>Appliquer</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 
   const renderSortOptions = () => (
@@ -405,12 +603,13 @@ export default function ProductsScreen() {
         <TextInput
           style={styles.searchInput}
           placeholder="Rechercher un produit..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
+          value={filters.search}
+          onChangeText={(text) => handleFilterChange({ search: text })}
         />
       </View>
       
       {renderCategoryFilter()}
+      {renderAdvancedFilters()}
       {renderSortOptions()}
 
       <FlatList
@@ -439,7 +638,7 @@ export default function ProductsScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#f5f5f5",
   },
   loadingContainer: {
     flex: 1,
@@ -521,24 +720,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     backgroundColor: "#f5f5f5",
   },
-  categoryContainer: {
-    flexDirection: "row",
+  filterContainer: {
     padding: 10,
     backgroundColor: "#fff",
   },
-  categoryButton: {
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    marginRight: 10,
-    borderRadius: 20,
-    backgroundColor: "#f5f5f5",
+  filterSection: {
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+    backgroundColor: "#fff",
   },
-  selectedCategory: {
-    backgroundColor: "#F59E0B",
+  filterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F5F5F5',
+    marginHorizontal: 4,
+  },
+  filterChipActive: {
+    backgroundColor: '#F59E0B',
+  },
+  filterChipText: {
+    fontSize: 14,
+    color: '#000',
   },
   sortContainer: {
     flexDirection: "row",
-    alignItems: "center",
+    justifyContent: "space-between",
     padding: 10,
     backgroundColor: "#fff",
   },
@@ -547,11 +755,8 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   sortButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    marginRight: 10,
-    borderRadius: 15,
-    backgroundColor: "#f5f5f5",
+    flexDirection: "row",
+    alignItems: "center",
   },
   selectedSort: {
     backgroundColor: "#F59E0B",
@@ -559,5 +764,53 @@ const styles = StyleSheet.create({
   footerLoader: {
     paddingVertical: 20,
     alignItems: "center",
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 20,
+    width: '80%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 5,
+    padding: 10,
+    marginBottom: 15,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  modalButton: {
+    flex: 1,
+    padding: 10,
+    borderRadius: 5,
+    marginHorizontal: 5,
+  },
+  cancelButton: {
+    backgroundColor: '#ccc',
+  },
+  applyButton: {
+    backgroundColor: '#F59E0B',
+  },
+  buttonText: {
+    color: 'white',
+    textAlign: 'center',
+    fontWeight: 'bold',
   },
 });

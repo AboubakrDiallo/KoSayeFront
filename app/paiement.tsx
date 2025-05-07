@@ -35,6 +35,10 @@ interface PaymentParams {
     phone: string;
     additionalInfo?: string;
   };
+  totalItems?: number;
+  subtotal: string;
+  discount: string;
+  shippingFee: string;
 }
 
 interface Address {
@@ -60,6 +64,12 @@ export default function PaymentScreen() {
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
   const [newAddress, setNewAddress] = useState<any>(null);
+
+  // Calculer les montants à partir des paramètres reçus
+  const calculatedSubtotal = parseFloat(params.subtotal as string) || subtotal;
+  const calculatedDiscount = parseFloat(params.discount as string) || discount;
+  const calculatedShippingFee = parseFloat(params.shippingFee as string) || shippingFee;
+  const calculatedTotal = parseFloat(params.amount as string) || total;
 
   useEffect(() => {
     const initializeAddress = async () => {
@@ -96,6 +106,15 @@ export default function PaymentScreen() {
 
     initializeAddress();
   }, []); // Suppression de la dépendance à params.newAddress
+
+  useEffect(() => {
+    console.log('=== PARAMÈTRES DE PAIEMENT ===');
+    console.log('Montant total:', params.amount);
+    console.log('Sous-total:', params.subtotal);
+    console.log('Réduction:', params.discount);
+    console.log('Frais de livraison:', params.shippingFee);
+    console.log('Méthode de paiement:', params.paymentMethod);
+  }, [params]);
 
   // État pour le formulaire
   const [formData, setFormData] = useState({
@@ -177,6 +196,15 @@ export default function PaymentScreen() {
         return;
       }
 
+      console.log('=== DÉBUT DU PROCESSUS DE PAIEMENT ===');
+      console.log('Paramètres reçus:', {
+        cartId: params.cartId,
+        amount: params.amount,
+        paymentMethod: params.paymentMethod,
+        totalItems: params.totalItems,
+        items: items
+      });
+
       // Récupérer l'adresse sélectionnée
       let shippingAddressId: string | undefined = params.shippingAddressId as string;
       let selectedAddress = null;
@@ -186,38 +214,30 @@ export default function PaymentScreen() {
           headers: { Authorization: `Bearer ${token}` }
         });
         
+        console.log('Adresses récupérées:', addressesResponse.data.data);
+        
         if (shippingAddressId) {
-          // Trouver l'adresse sélectionnée
           selectedAddress = addressesResponse.data.data.find((addr: any) => addr.id === Number(shippingAddressId));
           if (!selectedAddress) {
             Alert.alert("Erreur", "L'adresse sélectionnée n'existe plus");
             setLoading(false);
             return;
           }
+          console.log('Adresse sélectionnée trouvée:', selectedAddress);
         } else if (newAddress) {
-          // Utiliser la nouvelle adresse
           shippingAddressId = undefined;
+          console.log('Nouvelle adresse utilisée:', newAddress);
         } else {
-          // Utiliser l'adresse par défaut
           selectedAddress = addressesResponse.data.data.find((addr: any) => addr.isDefaultShipping);
           if (selectedAddress) {
             shippingAddressId = selectedAddress.id.toString();
+            console.log('Adresse par défaut utilisée:', selectedAddress);
           } else {
             Alert.alert("Erreur", "Veuillez sélectionner une adresse de livraison");
             setLoading(false);
             return;
           }
         }
-
-        // Afficher l'adresse sélectionnée
-        console.log('Adresse sélectionnée:', {
-          id: selectedAddress?.id,
-          recipientName: selectedAddress?.recipientName || newAddress?.recipientName,
-          city: selectedAddress?.city || newAddress?.city,
-          phone: selectedAddress?.phone || newAddress?.phone,
-          isDefaultShipping: selectedAddress?.isDefaultShipping
-        });
-
       } catch (error) {
         console.error("Erreur lors de la récupération des adresses:", error);
         Alert.alert("Erreur", "Impossible de récupérer les adresses");
@@ -247,20 +267,7 @@ export default function PaymentScreen() {
         } : undefined
       };
 
-      console.log('Données de la commande:', JSON.stringify(orderData, null, 2));
-
-      // Vérification des paramètres requis pour la commande
-      if (!orderData.cartId || !orderData.amount || !orderData.items || orderData.items.length === 0) {
-        Alert.alert("Erreur", "Paramètres de commande manquants");
-        setLoading(false);
-        return;
-      }
-
-      if (!orderData.shippingAddressId && !orderData.newAddress) {
-        Alert.alert("Erreur", "Veuillez sélectionner une adresse de livraison");
-        setLoading(false);
-        return;
-      }
+      console.log('Données de la commande:', orderData);
 
       try {
         const orderResponse = await api.post('/orders', orderData, {
@@ -270,15 +277,10 @@ export default function PaymentScreen() {
           }
         });
 
-        console.log('Réponse de la commande:', JSON.stringify(orderResponse.data, null, 2));
+        console.log('Réponse création commande:', orderResponse.data);
 
-        // Vérification de la réponse
-        if (!orderResponse.data) {
-          throw new Error("Pas de réponse du serveur");
-        }
-
-        if (orderResponse.data.status !== 200) {
-          throw new Error(orderResponse.data.message || "Erreur lors de la création de la commande");
+        if (!orderResponse.data || orderResponse.data.status !== 200) {
+          throw new Error(orderResponse.data?.message || "Erreur lors de la création de la commande");
         }
 
         const order = orderResponse.data.data?.order;
@@ -297,88 +299,103 @@ export default function PaymentScreen() {
           reference: order.reference
         };
 
-        console.log('Données du paiement:', JSON.stringify(paymentData, null, 2));
+        console.log('Données du paiement:', paymentData);
 
-        try {
-          const paymentResponse = await api.post('/payment/process', paymentData, {
-            headers: { 
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
-          });
-
-          console.log('Réponse du paiement:', JSON.stringify(paymentResponse.data, null, 2));
-
-          if (!paymentResponse.data) {
-            throw new Error("Pas de réponse du serveur pour le paiement");
+        const paymentResponse = await api.post('/payment/process', paymentData, {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
           }
+        });
 
-          if (paymentResponse.data.status !== 'success') {
-            throw new Error(paymentResponse.data.message || "Le paiement a échoué");
-          }
+        console.log('Réponse du processus de paiement:', paymentResponse.data);
 
-          // 3. Vérification du paiement
-          const verifyData = {
-            transactionId: paymentResponse.data.data?.transactionId,
-            orderId: order.id,
-            cartId: params.cartId || ''
-          };
-
-          if (!verifyData.transactionId) {
-            throw new Error("Transaction ID manquant dans la réponse du paiement");
-          }
-
-          console.log('Données de vérification:', JSON.stringify(verifyData, null, 2));
-
-          const verifyResponse = await api.post('/payment/verify', verifyData, {
-            headers: { 
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
-          });
-
-          console.log('Réponse de vérification:', JSON.stringify(verifyResponse.data, null, 2));
-
-          if (!verifyResponse.data) {
-            throw new Error("Pas de réponse du serveur pour la vérification");
-          }
-
-          if (verifyResponse.data.status !== 'success') {
-            throw new Error(verifyResponse.data.message || "La vérification du paiement a échoué");
-          }
-
-          // Vider le panier après une commande réussie
-          try {
-            const clearCartResponse = await api.delete(`/cart/${params.cartId}`, {
-              headers: { 
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json'
-              }
-            });
-
-            console.log('Panier vidé:', JSON.stringify(clearCartResponse.data, null, 2));
-          } catch (clearCartError) {
-            console.error("Erreur lors de la suppression du panier:", clearCartError);
-            // On continue quand même car la commande est réussie
-          }
-
-          // Redirection vers la page de confirmation
-          router.replace({
-            pathname: "/commande-confirmee",
-            params: {
-              orderId: order.id,
-              reference: order.reference,
-              amount: order.totalAmount,
-              paymentMethod: params.paymentMethod,
-              transactionId: paymentResponse.data.data.transactionId
-            }
-          });
-        } catch (paymentError: any) {
-          console.error("Erreur lors du paiement:", paymentError);
-          throw new Error(paymentError.response?.data?.message || paymentError.message || "Erreur lors du paiement");
+        if (!paymentResponse.data || paymentResponse.data.status !== 'success') {
+          throw new Error(paymentResponse.data?.message || "Le paiement a échoué");
         }
+
+        // 3. Vérification du paiement
+        const transactionId = paymentResponse.data.transactionId;
+        console.log('Transaction ID récupéré:', transactionId);
+
+        if (!transactionId) {
+          throw new Error("Transaction ID manquant dans la réponse du paiement");
+        }
+
+        const verifyData = {
+          transactionId,
+          orderId: order.id,
+          cartId: params.cartId || ''
+        };
+
+        console.log('Données de vérification:', verifyData);
+
+        const verifyResponse = await api.post('/payment/verify', verifyData, {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        console.log('Réponse de la vérification:', verifyResponse.data);
+
+        if (!verifyResponse.data || verifyResponse.data.status !== 'success') {
+          throw new Error(verifyResponse.data?.message || "La vérification du paiement a échoué");
+        }
+
+        // Vider le panier après une commande réussie
+        try {
+          console.log('Suppression du panier:', params.cartId);
+          await api.delete(`/cart/${params.cartId}`, {
+            headers: { 
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          clearCart(); // Vider le panier dans le contexte
+          console.log('Panier vidé avec succès');
+
+          // Afficher le message de succès et rediriger vers l'accueil
+          Alert.alert(
+            "Paiement réussi",
+            "Votre commande a été validée avec succès. Vous recevrez bientôt un email de confirmation.",
+            [
+              {
+                text: "Retour à l'accueil",
+                onPress: () => {
+                  console.log('Redirection vers l\'accueil');
+                  router.replace('/(tabs)/accueil');
+                }
+              }
+            ]
+          );
+        } catch (clearCartError) {
+          console.error("Erreur lors de la suppression du panier:", clearCartError);
+          // Même en cas d'erreur de suppression du panier, on affiche le message de succès et on redirige
+          Alert.alert(
+            "Paiement réussi",
+            "Votre commande a été validée avec succès. Vous recevrez bientôt un email de confirmation.",
+            [
+              {
+                text: "Retour à l'accueil",
+                onPress: () => {
+                  console.log('Redirection vers l\'accueil');
+                  router.replace('/(tabs)/accueil');
+                }
+              }
+            ]
+          );
+        }
+
+        console.log('=== PAIEMENT RÉUSSI ===');
+        console.log('Redirection vers l\'accueil');
+        router.replace('/(tabs)/accueil');
       } catch (error: any) {
-        console.error("Erreur détaillée:", error.response?.data || error);
+        console.error("=== ERREUR DÉTAILLÉE DU PAIEMENT ===", {
+          message: error.message,
+          response: error.response?.data,
+          status: error.response?.status
+        });
         setPaymentStatus('failed');
         let errorMessage = "Une erreur est survenue lors du paiement";
         
@@ -399,7 +416,11 @@ export default function PaymentScreen() {
         ]);
       }
     } catch (error: any) {
-      console.error("Erreur lors du paiement:", error);
+      console.error("=== ERREUR GÉNÉRALE DU PAIEMENT ===", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
       setPaymentStatus('failed');
       let errorMessage = "Une erreur est survenue lors du paiement";
       
@@ -407,7 +428,7 @@ export default function PaymentScreen() {
         errorMessage = "Session expirée. Veuillez vous reconnecter.";
         router.push("/connexion");
       } else if (error.response?.data?.message) {
-        errorMessage = errorMessage = error.response.data.message;
+        errorMessage = error.response.data.message;
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -469,7 +490,6 @@ export default function PaymentScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      {/* En-tête */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => router.back()}
@@ -488,23 +508,25 @@ export default function PaymentScreen() {
           <View style={styles.orderSummary}>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Articles</Text>
-              <Text style={styles.summaryValue}>{items.length}</Text>
+              <Text style={styles.summaryValue}>
+                {params.totalItems || items.reduce((total, item) => total + item.quantity, 0)} articles
+              </Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Total</Text>
-              <Text style={styles.summaryValue}>${subtotal}</Text>
+              <Text style={styles.summaryLabel}>Sous-total</Text>
+              <Text style={styles.summaryValue}>{calculatedSubtotal.toFixed(2)} €</Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Rabais</Text>
-              <Text style={styles.summaryValue}>${discount}</Text>
+              <Text style={styles.summaryLabel}>Réduction</Text>
+              <Text style={styles.summaryValue}>{calculatedDiscount.toFixed(2)} €</Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Frais de livraison</Text>
-              <Text style={styles.summaryValue}>${shippingFee}</Text>
+              <Text style={styles.summaryValue}>{calculatedShippingFee.toFixed(2)} €</Text>
             </View>
             <View style={[styles.summaryRow, styles.totalRow]}>
               <Text style={styles.totalLabel}>Total</Text>
-              <Text style={styles.totalValue}>${total}</Text>
+              <Text style={styles.totalValue}>{calculatedTotal.toFixed(2)} €</Text>
             </View>
           </View>
         </View>

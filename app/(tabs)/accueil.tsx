@@ -26,6 +26,7 @@ const CARD_WIDTH = width * 0.4;
 interface User {
   firstname: string;
   lastname: string;
+  profilePicture: string | null;
 }
 
 interface Category {
@@ -95,24 +96,41 @@ const useAuthToken = () => {
 
 // --- Composants UI ---
 
-const Header = ({ userName }: { userName: string }) => (
-  <View style={styles.headerContainer}>
-    <Text style={styles.userName}>{userName || "Bienvenue !"}</Text>
-    <View style={styles.headerIcons}>
-      <TouchableOpacity
-        style={styles.iconButton}
-        onPress={() => {
-          Alert.alert("Info", "La fonctionnalité de recherche n'est pas encore disponible.");
-        }}
-      >
-        <Ionicons name="search" size={26} color="#333" />
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.iconButton}>
-        <Ionicons name="notifications-outline" size={26} color="#333" />
-      </TouchableOpacity>
+const Header = ({ userName }: { userName: string }) => {
+  const { user } = useAuth();
+  const firstLetter = user?.firstname ? user.firstname.charAt(0).toUpperCase() : '?';
+
+  return (
+    <View style={styles.headerContainer}>
+      <View style={styles.userInfoContainer}>
+        {user?.profilePicture ? (
+          <Image 
+            source={{ uri: user.profilePicture }} 
+            style={styles.avatar}
+          />
+        ) : (
+          <View style={styles.avatarFallback}>
+            <Text style={styles.avatarText}>{firstLetter}</Text>
+          </View>
+        )}
+        <Text style={styles.userName}>{userName || "Bienvenue !"}</Text>
+      </View>
+      <View style={styles.headerIcons}>
+        <TouchableOpacity
+          style={styles.iconButton}
+          onPress={() => {
+            Alert.alert("Info", "La fonctionnalité de recherche n'est pas encore disponible.");
+          }}
+        >
+          <Ionicons name="search" size={26} color="#333" />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.iconButton}>
+          <Ionicons name="notifications-outline" size={26} color="#333" />
+        </TouchableOpacity>
+      </View>
     </View>
-  </View>
-);
+  );
+};
 
 const CategoryList = ({ categories }: { categories: Category[] }) => (
   <View style={styles.categoryContainer}>
@@ -455,6 +473,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 10,
     marginTop: 10,
+  },
+  userInfoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 10,
+  },
+  avatarFallback: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F59E0B',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  avatarText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
   userName: {
     fontSize: 18,

@@ -231,7 +231,7 @@ export default function VerificationScreen() {
       // Préparer les paramètres de redirection
       const paymentParams: any = {
         cartId: cart.id,
-        amount: cart.total.toFixed(2),
+        amount: cart.total.toString(),
         paymentMethod: selectedPayment,
         phoneNumber: newAddress.phone || user?.phone || "",
         items: JSON.stringify(cart.items.map(item => ({
@@ -239,7 +239,11 @@ export default function VerificationScreen() {
           variantId: item.variant?.id || null,
           quantity: item.quantity,
           unitPrice: item.unit_price
-        })))
+        }))),
+        totalItems: cart.items.reduce((total, item) => total + item.quantity, 0),
+        subtotal: cart.subtotal.toString(),
+        discount: cart.discount.toString(),
+        shippingFee: cart.shipping_fee.toString()
       };
 
       // Ajouter l'adresse sélectionnée ou la nouvelle adresse
@@ -497,7 +501,9 @@ export default function VerificationScreen() {
           <View style={styles.summaryContent}>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Articles</Text>
-              <Text style={styles.summaryValue}>{cart?.items?.length || 0}</Text>
+              <Text style={styles.summaryValue}>
+                {cart?.items?.reduce((total, item) => total + item.quantity, 0) || 0} articles
+              </Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Sous-total</Text>

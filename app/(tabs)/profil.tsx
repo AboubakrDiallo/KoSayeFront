@@ -10,38 +10,81 @@ import {
   Modal,
   Dimensions,
   StatusBar,
+  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useProfile } from "../../contexts/ProfileContext";
+import { useAuth } from "../contexts/AuthContext";
 import * as ImagePicker from "expo-image-picker";
+import api from "../api/api";
+import { getToken } from "../utils/auth";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { user, logout, updateUser } = useAuth();
   const [isImageModalVisible, setIsImageModalVisible] = useState(false);
-  const { profileImage, setProfileImage } = useProfile();
+  const [profileImage, setProfileImage] = useState(user?.profilePicture || null);
 
   const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
-    if (status !== "granted") {
-      alert(
-        "Désolé, nous avons besoin de la permission d'accéder à votre galerie pour changer la photo de profil."
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission refusée",
+          "Nous avons besoin de la permission d'accéder à votre galerie pour changer la photo de profil."
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled) {
+        const token = await getToken();
+        if (!token) {
+          Alert.alert("Erreur", "Session expirée. Veuillez vous reconnecter.");
+          router.push("/connexion");
+          return;
+        }
+
+        // Créer un objet FormData pour l'envoi de l'image
+        const formData = new FormData();
+        formData.append('profilePicture', {
+          uri: result.assets[0].uri,
+          type: 'image/jpeg',
+          name: 'profile-picture.jpg',
+        } as any);
+
+        // Envoyer l'image au serveur
+        const response = await api.put('/user/profile', formData, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+
+        if (response.data.success) {
+          // Mettre à jour le contexte d'authentification
+          updateUser({ profilePicture: result.assets[0].uri });
+          setProfileImage(result.assets[0].uri);
+          Alert.alert("Succès", "Photo de profil mise à jour avec succès");
+        } else {
+          throw new Error(response.data.message || "Erreur lors de la mise à jour de la photo");
+        }
+      }
+    } catch (error: any) {
+      console.error("Erreur lors de la mise à jour de la photo:", error);
+      Alert.alert(
+        "Erreur",
+        error.response?.data?.message || "Une erreur est survenue lors de la mise à jour de la photo"
       );
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 1,
-    });
-
-    if (!result.canceled) {
-      setProfileImage(result.assets[0].uri);
     }
   };
 
@@ -49,31 +92,31 @@ export default function ProfileScreen() {
     {
       id: "profil",
       title: "Profil",
-      icon: "person",
+      icon: "person" as const,
       color: "#F59E0B",
     },
     {
       id: "parametre",
       title: "Paramètre",
-      icon: "settings",
+      icon: "settings" as const,
       color: "#F59E0B",
     },
     {
       id: "contact",
       title: "Contact",
-      icon: "mail",
+      icon: "mail" as const,
       color: "#F59E0B",
     },
     {
       id: "partager",
       title: "Partager l'application",
-      icon: "share-social",
+      icon: "share-social" as const,
       color: "#F59E0B",
     },
     {
       id: "aide",
       title: "Aide",
-      icon: "help-circle",
+      icon: "help-circle" as const,
       color: "#F59E0B",
     },
   ];
@@ -100,14 +143,29 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleLogout = () => {
-    // Implémenter la logique de déconnexion
-    router.push("/");
+  const handleLogout = async () => {
+    try {
+      await logout();
+      router.replace("/connexion");
+    } catch (error) {
+      console.error("Erreur lors de la déconnexion:", error);
+      Alert.alert("Erreur", "Une erreur est survenue lors de la déconnexion");
+    }
   };
 
   const toggleImageModal = () => {
     setIsImageModalVisible(!isImageModalVisible);
   };
+
+  if (!user) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text>Chargement...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -115,13 +173,18 @@ export default function ProfileScreen() {
         {/* Photo de profil et informations */}
         <View style={styles.profileSection}>
           <TouchableOpacity onPress={pickImage}>
-            <Image source={{ uri: profileImage }} style={styles.profileImage} />
-            <View style={styles.imageOverlay}>
-              <Ionicons name="camera" size={24} color="#FFF" />
-            </View>
+            {profileImage ? (
+              <Image source={{ uri: profileImage }} style={styles.profileImage} />
+            ) : (
+              <View style={styles.profileImageFallback}>
+                <Text style={styles.profileImageFallbackText}>
+                  {user.firstname.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
-          <Text style={styles.name}>Aboubacar Diallo</Text>
-          <Text style={styles.email}>aladji.diallo.7509@gmail.com</Text>
+          <Text style={styles.name}>{`${user.firstname} ${user.lastname}`}</Text>
+          <Text style={styles.email}>{user.email}</Text>
         </View>
 
         {/* Menu items */}
@@ -162,11 +225,13 @@ export default function ProfileScreen() {
           >
             <Ionicons name="close" size={28} color="#FFF" />
           </TouchableOpacity>
-          <Image
-            source={{ uri: profileImage }}
-            style={styles.fullScreenImage}
-            resizeMode="contain"
-          />
+          {profileImage && (
+            <Image
+              source={{ uri: profileImage }}
+              style={styles.fullScreenImage}
+              resizeMode="contain"
+            />
+          )}
         </View>
       </Modal>
     </SafeAreaView>
@@ -177,6 +242,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff",
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
   scrollView: {
     flex: 1,
@@ -192,21 +262,23 @@ const styles = StyleSheet.create({
     borderRadius: 60,
     marginBottom: 16,
   },
-  imageOverlay: {
-    position: "absolute",
-    right: 0,
-    bottom: 16,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  profileImageFallback: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    marginBottom: 16,
+    backgroundColor: "#F59E0B",
     justifyContent: "center",
     alignItems: "center",
   },
+  profileImageFallbackText: {
+    fontSize: 48,
+    color: "#FFFFFF",
+    fontWeight: "bold",
+  },
   name: {
     fontSize: 24,
-    fontWeight: "600",
-    color: "#000",
+    fontWeight: "bold",
     marginBottom: 8,
   },
   email: {
@@ -214,56 +286,55 @@ const styles = StyleSheet.create({
     color: "#666",
   },
   menuContainer: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
   },
   menuItem: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F5F5F5",
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
   },
   menuIconContainer: {
     width: 40,
     height: 40,
+    borderRadius: 20,
+    backgroundColor: "#FEF3C7",
     justifyContent: "center",
     alignItems: "center",
+    marginRight: 15,
   },
   menuTitle: {
     flex: 1,
     fontSize: 16,
-    color: "#000",
-    marginLeft: 12,
+    color: "#333",
   },
   logoutButton: {
-    margin: 16,
-    padding: 16,
+    margin: 20,
+    padding: 15,
+    backgroundColor: "#F59E0B",
+    borderRadius: 10,
     alignItems: "center",
   },
   logoutText: {
+    color: "#fff",
     fontSize: 16,
-    color: "#FF0000",
-    fontWeight: "600",
+    fontWeight: "bold",
   },
-  // Styles pour le modal
   modalContainer: {
     flex: 1,
     backgroundColor: "#000",
     justifyContent: "center",
     alignItems: "center",
   },
-  fullScreenImage: {
-    width: screenWidth,
-    height: screenHeight * 0.8,
-  },
   closeButton: {
     position: "absolute",
     top: 40,
     right: 20,
     zIndex: 1,
-    padding: 8,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    borderRadius: 20,
+  },
+  fullScreenImage: {
+    width: screenWidth,
+    height: screenHeight,
   },
 });

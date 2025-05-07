@@ -103,7 +103,13 @@ const useAuthToken = () => {
 
 const ProductDetail = () => {
   const params = useLocalSearchParams();
-  const productId = parseInt(params.productId as string);
+  const productId = params.id ? parseInt(params.id as string, 10) : 
+                   params.productId ? parseInt(params.productId as string, 10) : null;
+  
+  console.log('=== DÉTAILS PRODUIT ===');
+  console.log('Params reçus:', params);
+  console.log('Product ID converti:', productId);
+
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
@@ -114,6 +120,8 @@ const ProductDetail = () => {
   const { getToken } = useAuthToken();
 
   const fetchFavorites = async (token: string) => {
+    if (!productId) return;
+    
     try {
       const response = await api.get("/wishlist", {
         headers: { Authorization: `Bearer ${token}` },
@@ -145,6 +153,11 @@ const ProductDetail = () => {
     if (!token) {
       Alert.alert("Erreur", "Vous devez être connecté pour ajouter aux favoris.");
       router.push("/connexion");
+      return;
+    }
+
+    if (!productId) {
+      Alert.alert("Erreur", "ID du produit invalide");
       return;
     }
 
@@ -200,6 +213,8 @@ const ProductDetail = () => {
       setError(null);
       console.log("Fetching product with ID:", productId);
       const response = await api.get(`/products/${productId}`);
+      console.log("Réponse API:", response.data);
+      
       if (response.data && response.data.data) {
         setProduct(response.data.data);
         const token = await getToken();
@@ -219,7 +234,12 @@ const ProductDetail = () => {
 
   useEffect(() => {
     console.log("Product ID from params:", productId);
-    fetchProduct();
+    if (productId) {
+      fetchProduct();
+    } else {
+      setError("ID du produit invalide");
+      setLoading(false);
+    }
   }, [productId]);
 
   const getOrCreateCart = async (token: string) => {
@@ -326,21 +346,26 @@ const ProductDetail = () => {
 
   const handleAddToCart = async () => {
     if (!product) return;
-    const token = await getToken();
-    if (!token) {
-      Alert.alert('Erreur', 'Veuillez vous connecter pour ajouter un produit au panier');
-      router.push('/connexion');
-      return;
-    }
-
+    
     try {
+      console.log('=== DÉBUT AJOUT AU PANIER ===');
+      console.log('Produit à ajouter:', product);
+
+      const token = await getToken();
+      if (!token) {
+        console.log('Aucun token trouvé, redirection vers connexion');
+        Alert.alert('Erreur', 'Veuillez vous connecter pour ajouter un produit au panier');
+        router.push('/connexion');
+        return;
+      }
+
       const productId = product.id;
       const variantId = selectedVariant?.id;
       const quantity = 1;
 
       // Check stock
       const availableStock = selectedVariant ? selectedVariant.stock : product.stock;
-      console.log('ProductDetail - Vérification stock:', {
+      console.log('Vérification stock:', {
         productId,
         variantId,
         availableStock,
@@ -371,7 +396,7 @@ const ProductDetail = () => {
         throw new Error('Impossible de créer ou récupérer un panier');
       }
 
-      console.log('ProductDetail - Tentative ajout au panier:', {
+      console.log('Tentative ajout au panier:', {
         cartId: cart.id,
         productId,
         variantId,
@@ -398,13 +423,17 @@ const ProductDetail = () => {
         productId,
         ...(variantId && { variantId }),
         quantity,
+        unit_price: selectedVariant ? selectedVariant.price : product.price
       };
 
-      console.log('ProductDetail - Envoi POST /cart-items:', JSON.stringify(payload, null, 2));
+      console.log('Envoi POST /cart-items:', JSON.stringify(payload, null, 2));
       const response = await api.post('/cart-items', payload, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
-      console.log('ProductDetail - Réponse POST /cart-items:', JSON.stringify(response.data, null, 2));
+      console.log('Réponse POST /cart-items:', JSON.stringify(response.data, null, 2));
 
       Alert.alert(
         'Succès', 
@@ -417,34 +446,31 @@ const ProductDetail = () => {
             style: 'cancel',
           },
           {
-            text: 'Passer à la vérification',
+            text: 'Voir mon panier',
             onPress: () => {
-              router.replace('/verification');
+        router.push({
+                pathname: '/panier',
+                params: { refresh: Date.now() }
+              });
             },
           },
         ]
       );
     } catch (error: any) {
-      console.error('ProductDetail - Erreur ajout panier:', error);
-      console.log('ProductDetail - Détails erreur:', JSON.stringify(error.response?.data, null, 2));
+      console.error('=== ERREUR AJOUT AU PANIER ===', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      
       let errorMessage = 'Impossible d\'ajouter le produit au panier';
-      if (error.message.includes('Impossible de créer ou récupérer un panier')) {
-        errorMessage = 'Erreur lors de la gestion du panier. Veuillez réessayer.';
-      } else if (error.response?.status === 404) {
-        errorMessage = 'Produit, variante ou panier non trouvé. Vérifiez les données.';
-      } else if (error.response?.status === 400) {
-        if (error.response?.data?.message.includes('Stock insuffisant')) {
-          errorMessage = 'Stock insuffisant pour ce produit ou cette variante.';
-        } else if (error.response?.data?.message.includes('cartId')) {
-          errorMessage = 'Panier invalide. Veuillez réessayer.';
-        } else if (error.response?.data?.message.includes('produit ou variante non trouvé')) {
-          errorMessage = 'Produit ou variante non trouvé dans la base de données.';
-        } else {
-          errorMessage = error.response?.data?.message || 'Erreur de validation des données.';
-        }
+      if (error.response?.status === 401) {
+        errorMessage = "Session expirée. Veuillez vous reconnecter.";
+        router.push("/connexion");
       } else if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       }
+      
       Alert.alert('Erreur', errorMessage);
     }
   };
@@ -508,8 +534,8 @@ const ProductDetail = () => {
               color={isFavorite ? "#FF3B30" : "#000"} 
             />
           </TouchableOpacity>
-        </View>
-
+      </View>
+      
         <View style={styles.infoContainer}>
           <Text style={styles.productName}>{product?.name}</Text>
           <Text style={styles.productPrice}>{product?.price} €</Text>
@@ -539,14 +565,27 @@ const ProductDetail = () => {
                   key={index}
                   style={[
                     styles.variantCard,
-                    selectedVariant?.id === variant.id && styles.selectedVariant
+                    selectedVariant?.id === variant.id && styles.selectedVariant,
+                    variant.stock === 0 && styles.outOfStockVariant
                   ]}
-                  onPress={() => setSelectedVariant(variant)}
+                  onPress={() => {
+                    if (variant.stock > 0) {
+                      setSelectedVariant(variant);
+                    } else {
+                      Alert.alert('Stock épuisé', 'Cette variante n\'est plus disponible en stock.');
+                    }
+                  }}
                 >
-                  <Text style={styles.variantName}>{variant.name}</Text>
+                  <Text style={[
+                    styles.variantName,
+                    variant.stock === 0 && styles.outOfStockText
+                  ]}>{variant.name}</Text>
                   <Text style={styles.variantPrice}>{variant.price} €</Text>
-                  <Text style={styles.variantStock}>
-                    En stock: {variant.stock}
+                  <Text style={[
+                    styles.variantStock,
+                    variant.stock === 0 && styles.outOfStockText
+                  ]}>
+                    {variant.stock > 0 ? `En stock: ${variant.stock}` : 'Rupture de stock'}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -573,12 +612,15 @@ const ProductDetail = () => {
 
       <View style={styles.actionContainer}>
         <TouchableOpacity
-          style={styles.addToCartButton}
+          style={[
+            styles.addToCartButton,
+            (!selectedVariant && product.stock === 0) && styles.disabledButton
+          ]}
           onPress={handleAddToCart}
-          disabled={!selectedVariant || selectedVariant.stock === 0}
+          disabled={(!selectedVariant && product.stock === 0)}
         >
           <Text style={styles.buttonText}>
-            {selectedVariant?.stock === 0 ? 'Rupture de stock' : 'Ajouter au panier'}
+            {(!selectedVariant && product.stock === 0) ? 'Rupture de stock' : 'Ajouter au panier'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -742,6 +784,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
+  },
+  disabledButton: {
+    backgroundColor: '#ccc',
+    opacity: 0.7,
+  },
+  outOfStockVariant: {
+    backgroundColor: '#F5F5F5',
+    opacity: 0.7,
+  },
+  outOfStockText: {
+    color: '#999',
   },
 });
 
