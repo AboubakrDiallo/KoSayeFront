@@ -61,29 +61,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const response = await api.post('/user/login', { email, password });
       console.log('=== RÉPONSE CONNEXION ===');
       console.log('Message:', response.data.message);
-      console.log('Données utilisateur:', response.data.details.user);
+      console.log('Données complètes:', JSON.stringify(response.data, null, 2));
       
       if (response.data.message === "Connexion réussie") {
+        // Vérifier si le token existe dans la réponse
+        if (!response.data.token?.token) {
+          console.error('Token manquant dans la réponse:', response.data);
+          throw new Error('Token manquant dans la réponse du serveur');
+        }
+
         const token = response.data.token.token;
+        console.log('Token reçu:', token);
+        
         await setToken(token);
-        console.log('Token sauvegardé:', token);
+        console.log('Token sauvegardé');
+        
+        // Configurer le token dans les headers de l'API
+        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        console.log('Token configuré dans les headers de l\'API');
         
         // Récupérer les données de l'utilisateur via le profil
         console.log('=== RÉCUPÉRATION DONNÉES UTILISATEUR ===');
-        const userResponse = await api.get('/user/profile', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const userResponse = await api.get('/user/profile');
         
         console.log('=== DONNÉES UTILISATEUR RÉCUPÉRÉES ===');
-        console.log('Email attendu:', email);
-        console.log('Email reçu:', userResponse.data.data.email);
-        console.log('Données complètes:', JSON.stringify(userResponse.data.data, null, 2));
+        console.log('Données complètes:', JSON.stringify(userResponse.data, null, 2));
         
-        if (userResponse.data.data.email !== email) {
-          console.error('=== ERREUR D\'INCOHÉRENCE ===');
-          console.error('Email de connexion:', email);
-          console.error('Email récupéré:', userResponse.data.data.email);
-          throw new Error('Les données utilisateur ne correspondent pas à l\'utilisateur connecté');
+        if (!userResponse.data.data) {
+          throw new Error('Données utilisateur manquantes dans la réponse');
         }
         
         const userData = {
@@ -100,7 +105,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log(JSON.stringify(userData, null, 2));
         setUser(userData);
         
-        router.replace("/(tabs)/accueil");
+        // Attendre un court instant pour s'assurer que l'état est mis à jour
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        console.log('=== REDIRECTION VERS ACCUEIL ===');
+        router.push('/(tabs)/accueil');
         return;
       }
       
@@ -214,7 +223,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateUser = (userData: Partial<User>) => {
-    setUser(prev => prev ? { ...prev, ...userData } : null);
+    console.log('=== MISE À JOUR UTILISATEUR ===');
+    console.log('Données reçues:', userData);
+    
+    setUser(prev => {
+      if (!prev) return null;
+      
+      // Si une nouvelle photo de profil est fournie, construire l'URL complète
+      if (userData.profilePicture) {
+        const baseUrl = 'http://192.168.1.144:3333';
+        // Vérifier si l'URL est déjà complète
+        if (!userData.profilePicture.startsWith('http')) {
+          // Si le chemin commence par /uploads, on l'utilise tel quel
+          if (userData.profilePicture.startsWith('/uploads')) {
+            userData.profilePicture = `${baseUrl}${userData.profilePicture}`;
+          } else {
+            // Sinon, on ajoute le chemin /uploads/users/
+            userData.profilePicture = `${baseUrl}/uploads/users/${userData.profilePicture}`;
+          }
+        }
+        console.log('URL de la photo de profil construite:', userData.profilePicture);
+      }
+      
+      const updatedUser = { ...prev, ...userData };
+      console.log('Utilisateur mis à jour:', updatedUser);
+      return updatedUser;
+    });
   };
 
   return (

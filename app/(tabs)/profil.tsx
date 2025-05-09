@@ -11,6 +11,7 @@ import {
   Dimensions,
   StatusBar,
   Alert,
+  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -26,6 +27,7 @@ export default function ProfileScreen() {
   const { user, logout, updateUser } = useAuth();
   const [isImageModalVisible, setIsImageModalVisible] = useState(false);
   const [profileImage, setProfileImage] = useState(user?.profilePicture || null);
+  const [imageError, setImageError] = useState(false);
 
   const pickImage = async () => {
     try {
@@ -57,7 +59,7 @@ export default function ProfileScreen() {
         // Créer un objet FormData pour l'envoi de l'image
         const formData = new FormData();
         formData.append('profilePicture', {
-          uri: result.assets[0].uri,
+          uri: Platform.OS === 'ios' ? result.assets[0].uri.replace('file://', '') : result.assets[0].uri,
           type: 'image/jpeg',
           name: 'profile-picture.jpg',
         } as any);
@@ -67,13 +69,15 @@ export default function ProfileScreen() {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'multipart/form-data',
+            'Accept': 'application/json',
           },
         });
 
         if (response.data.success) {
-          // Mettre à jour le contexte d'authentification
-          updateUser({ profilePicture: result.assets[0].uri });
-          setProfileImage(result.assets[0].uri);
+          // Réinitialiser l'état d'erreur d'image
+          setImageError(false);
+          // Mettre à jour le contexte d'authentification avec la nouvelle photo
+          updateUser({ profilePicture: response.data.data.profilePicture });
           Alert.alert("Succès", "Photo de profil mise à jour avec succès");
         } else {
           throw new Error(response.data.message || "Erreur lors de la mise à jour de la photo");
@@ -173,8 +177,15 @@ export default function ProfileScreen() {
         {/* Photo de profil et informations */}
         <View style={styles.profileSection}>
           <TouchableOpacity onPress={pickImage}>
-            {profileImage ? (
-              <Image source={{ uri: profileImage }} style={styles.profileImage} />
+            {user.profilePicture && !imageError ? (
+              <Image 
+                source={{ uri: user.profilePicture }} 
+                style={styles.profileImage}
+                onError={(e) => {
+                  console.log('Erreur de chargement de l\'image:', e.nativeEvent.error);
+                  setImageError(true);
+                }}
+              />
             ) : (
               <View style={styles.profileImageFallback}>
                 <Text style={styles.profileImageFallbackText}>

@@ -23,9 +23,9 @@ import { getToken } from "./utils/auth";
 
 export default function DetailProfilScreen() {
   const router = useRouter();
-  const { user } = useAuth();
-  const [loading, setLoading] = useState(false);
+  const { user, updateUser } = useAuth();
   const { profileImage, setProfileImage } = useProfile();
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     firstname: user?.firstname || "",
     lastname: user?.lastname || "",
@@ -82,15 +82,21 @@ export default function DetailProfilScreen() {
 
       // Add image if selected
       if (selectedImage) {
-        const imageUri = selectedImage.uri;
-        const imageName = imageUri.split('/').pop() || 'profile.jpg';
-        const imageType = selectedImage.type || 'image/jpeg';
+        const imageUri = Platform.OS === 'ios' 
+          ? selectedImage.uri.replace('file://', '') 
+          : selectedImage.uri;
+
+        // Créer un vrai fichier à partir de l'URI
+        const response = await fetch(imageUri);
+        const blob = await response.blob();
         
-        formDataToSend.append('profilePicture', {
-          uri: imageUri,
-          type: imageType,
-          name: imageName,
-        } as any);
+        // Créer un fichier à partir du blob
+        const file = new File([blob], 'profile-picture.jpg', {
+          type: 'image/jpeg',
+          lastModified: new Date().getTime()
+        });
+        
+        formDataToSend.append('profilePicture', file);
       }
 
       const response = await api.put(
@@ -100,15 +106,30 @@ export default function DetailProfilScreen() {
           headers: { 
             Authorization: `Bearer ${token}`,
             'Content-Type': 'multipart/form-data',
+            'Accept': 'application/json',
           }
         }
       );
 
-      if (response.data.success) {
+      // Si nous avons une réponse, c'est un succès
+      if (response.data) {
+        // Construire l'URL complète de l'image
+        const baseUrl = 'http://192.168.1.144:3333';
+        const profilePictureUrl = response.data.data?.profilePicture 
+          ? `${baseUrl}${response.data.data.profilePicture}`
+          : null;
+
+        // Mettre à jour le contexte d'authentification avec les nouvelles données
+        const updatedUserData = {
+          ...user,
+          ...formData,
+          profilePicture: profilePictureUrl
+        };
+        
+        updateUser(updatedUserData);
+        
         Alert.alert("Succès", "Profil mis à jour avec succès");
         router.back();
-      } else {
-        throw new Error(response.data.message || "Erreur lors de la mise à jour du profil");
       }
     } catch (error: any) {
       console.error("Erreur lors de la mise à jour du profil:", error);

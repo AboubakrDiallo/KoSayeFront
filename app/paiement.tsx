@@ -39,6 +39,7 @@ interface PaymentParams {
   subtotal: string;
   discount: string;
   shippingFee: string;
+  items?: string;
 }
 
 interface Address {
@@ -202,7 +203,7 @@ export default function PaymentScreen() {
         amount: params.amount,
         paymentMethod: params.paymentMethod,
         totalItems: params.totalItems,
-        items: items
+        items: params.items
       });
 
       // Récupérer l'adresse sélectionnée
@@ -245,16 +246,30 @@ export default function PaymentScreen() {
         return;
       }
 
+      // Parser les items depuis les paramètres URL
+      let orderItems = [];
+      try {
+        if (params.items) {
+          orderItems = JSON.parse(params.items as string);
+        }
+      } catch (error) {
+        console.error("Erreur lors du parsing des items:", error);
+        Alert.alert("Erreur", "Format des items invalide");
+        setLoading(false);
+        return;
+      }
+
       // 1. Création de la commande
       const orderData = {
         cartId: params.cartId || '',
-        amount: params.amount || '0',
+        amount: Number(params.amount) || 0,
         paymentMethod: params.paymentMethod || 'orange',
         status: 'pending',
-        items: items.map(item => ({
+        items: orderItems.map((item: any) => ({
           productId: Number(item.productId),
-          variantId: item.variantId ? Number(item.variantId) : undefined,
-          quantity: Number(item.quantity)
+          variantId: item.variantId ? Number(item.variantId) : null,
+          quantity: Number(item.quantity),
+          unitPrice: Number(item.unitPrice)
         })),
         addressChoice: newAddress ? 'new' : 'existing',
         shippingAddressId: newAddress ? undefined : shippingAddressId,
@@ -262,10 +277,15 @@ export default function PaymentScreen() {
           recipientName: newAddress.recipientName,
           city: newAddress.city,
           phone: newAddress.phone,
-          additionalInfo: newAddress.additionalInfo,
+          additionalInfo: newAddress.additionalInfo || null,
           isDefaultShipping: false
         } : undefined
       };
+
+      // Vérifier que nous avons au moins un item
+      if (!orderData.items || orderData.items.length === 0) {
+        throw new Error("Le panier est vide");
+      }
 
       console.log('Données de la commande:', orderData);
 
@@ -294,9 +314,9 @@ export default function PaymentScreen() {
           cartId: params.cartId || '',
           phoneNumber: phoneNumber.trim(),
           provider: params.paymentMethod || 'orange',
-          amount: order.totalAmount.toString(),
-          shippingAddressId: order.shippingAddressId,
-          reference: order.reference
+          amount: Number(order.totalAmount),
+          shippingAddressId: order.shippingAddressId || undefined,
+          reference: order.reference || undefined
         };
 
         console.log('Données du paiement:', paymentData);
@@ -310,12 +330,12 @@ export default function PaymentScreen() {
 
         console.log('Réponse du processus de paiement:', paymentResponse.data);
 
-        if (!paymentResponse.data || paymentResponse.data.status !== 'success') {
+        if (!paymentResponse.data || paymentResponse.data.status !== 200) {
           throw new Error(paymentResponse.data?.message || "Le paiement a échoué");
         }
 
         // 3. Vérification du paiement
-        const transactionId = paymentResponse.data.transactionId;
+        const transactionId = paymentResponse.data.data?.transactionId;
         console.log('Transaction ID récupéré:', transactionId);
 
         if (!transactionId) {
@@ -339,7 +359,7 @@ export default function PaymentScreen() {
 
         console.log('Réponse de la vérification:', verifyResponse.data);
 
-        if (!verifyResponse.data || verifyResponse.data.status !== 'success') {
+        if (!verifyResponse.data || verifyResponse.data.status !== 200) {
           throw new Error(verifyResponse.data?.message || "La vérification du paiement a échoué");
         }
 
@@ -358,7 +378,7 @@ export default function PaymentScreen() {
           // Afficher le message de succès et rediriger vers l'accueil
           Alert.alert(
             "Paiement réussi",
-            "Votre commande a été validée avec succès. Vous recevrez bientôt un email de confirmation.",
+            paymentResponse.data.message || "Votre commande a été validée avec succès. Vous recevrez bientôt un email de confirmation.",
             [
               {
                 text: "Retour à l'accueil",
@@ -374,7 +394,7 @@ export default function PaymentScreen() {
           // Même en cas d'erreur de suppression du panier, on affiche le message de succès et on redirige
           Alert.alert(
             "Paiement réussi",
-            "Votre commande a été validée avec succès. Vous recevrez bientôt un email de confirmation.",
+            paymentResponse.data.message || "Votre commande a été validée avec succès. Vous recevrez bientôt un email de confirmation.",
             [
               {
                 text: "Retour à l'accueil",

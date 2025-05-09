@@ -14,10 +14,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import api from "../api/api";
 import { useAuth } from "../contexts/AuthContext";
+import { getToken } from '../utils/auth';
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = width * 0.4;
@@ -82,23 +83,51 @@ const fallbackProducts: Product[] = [
   },
 ];
 
-// --- Fonction utilitaire pour récupérer le token ---
-const useAuthToken = () => {
-  const getToken = async (): Promise<string | null> => {
-    if (Platform.OS !== 'web') {
-      return await SecureStore.getItemAsync('userToken');
-    } else {
-      return localStorage.getItem('userToken');
-    }
-  };
-  return { getToken };
-};
-
 // --- Composants UI ---
 
 const Header = ({ userName }: { userName: string }) => {
   const { user } = useAuth();
   const firstLetter = user?.firstname ? user.firstname.charAt(0).toUpperCase() : '?';
+  const router = useRouter();
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+
+  const fetchUnreadNotifications = async () => {
+    try {
+      const token = await getToken();
+      if (!token) return;
+
+      console.log('Fetching unread notifications...');
+      const response = await api.get('/notifications/unread/count', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      console.log('Notifications response:', response.data);
+      
+      if (response.data && typeof response.data.count === 'number') {
+        console.log('Setting unread notifications count:', response.data.count);
+        setUnreadNotifications(response.data.count);
+      } else {
+        console.log('Invalid response format:', response.data);
+        setUnreadNotifications(0);
+      }
+    } catch (error) {
+      console.error('Erreur lors de la récupération des notifications non lues:', error);
+      setUnreadNotifications(0);
+    }
+  };
+
+  useEffect(() => {
+    fetchUnreadNotifications();
+    // Rafraîchir le compteur toutes les 30 secondes
+    const interval = setInterval(fetchUnreadNotifications, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleNotificationPress = () => {
+    router.push('/notifications');
+  };
 
   return (
     <View style={styles.headerContainer}>
@@ -124,8 +153,18 @@ const Header = ({ userName }: { userName: string }) => {
         >
           <Ionicons name="search" size={26} color="#333" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.iconButton}>
+        <TouchableOpacity 
+          style={styles.iconButton}
+          onPress={handleNotificationPress}
+        >
           <Ionicons name="notifications-outline" size={26} color="#333" />
+          {unreadNotifications > 0 && (
+            <View style={styles.notificationBadge}>
+              <Text style={styles.notificationBadgeText}>
+                {unreadNotifications > 99 ? '99+' : unreadNotifications}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -250,13 +289,26 @@ const ProductSection = ({
 
 // --- Écran Principal Accueil ---
 export default function AccueilScreen() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [categories, setCategories] = useState<Category[]>([]);
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [popularProducts, setPopularProducts] = useState<Product[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const { getToken } = useAuthToken();
+  const [orders, setOrders] = useState([]);
+
+  const updateUserData = (data: any) => {
+    if (data && updateUser) {
+      updateUser({
+        id: data.id,
+        email: data.email,
+        firstname: data.firstname,
+        lastname: data.lastname,
+        phone: data.phone,
+        profilePicture: data.profilePicture || null
+      });
+    }
+  };
 
   const fetchUserData = async (token: string) => {
     try {
@@ -357,6 +409,30 @@ export default function AccueilScreen() {
     }
   };
 
+  const fetchOrders = async () => {
+    try {
+      const token = await getToken();
+      if (!token) {
+        router.push('/connexion');
+        return;
+      }
+
+      const response = await api.get('/orders', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.data.success) {
+        setOrders(response.data.data);
+      }
+    } catch (error) {
+      console.error('Erreur lors de la récupération des commandes:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
@@ -367,6 +443,7 @@ export default function AccueilScreen() {
         if (token) {
           await fetchUserData(token);
           await fetchFavorites(token);
+          await fetchOrders();
         } else {
           console.log("Aucun token trouvé");
           router.replace("/connexion");
@@ -619,8 +696,17 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginHorizontal: 10,
   },
+  notificationBadge: {
+    backgroundColor: '#FF0000',
+    borderRadius: 10,
+    padding: 2,
+    position: 'absolute',
+    top: -5,
+    right: -5,
+  },
+  notificationBadgeText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
 });
-
-function updateUserData(data: any) {
-  throw new Error("Function not implemented.");
-}

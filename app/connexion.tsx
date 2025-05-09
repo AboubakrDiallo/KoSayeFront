@@ -15,10 +15,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import api from "./api/api";
-import { AxiosError } from 'axios'; 
-
+import { AxiosError } from 'axios';
+import { useAuth } from "./contexts/AuthContext";
 
 export default function EcranConnexion() {
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [seSouvenir, setSeSouvenir] = useState(false);
@@ -55,33 +56,8 @@ export default function EcranConnexion() {
       console.log("Email:", email);
       console.log("URL de l'API:", api.defaults.baseURL);
       
-      const response = await api.post("/user/login", {
-        email,
-        password,
-      });
+      await login(email, password);
       
-      console.log("=== RÉPONSE CONNEXION ===");
-      console.log("Message:", response.data.message);
-      console.log("Données:", response.data);
-      
-      if (response.data.token) {
-        const token = response.data.token.token;
-        console.log("Token reçu:", token);
-        
-        if (Platform.OS !== "web") {
-          await SecureStore.setItemAsync("userToken", token);
-          console.log("Token sauvegardé dans SecureStore");
-        } else {
-          localStorage.setItem("userToken", token);
-          console.log("Token sauvegardé dans localStorage");
-        }
-        
-        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        console.log("Token ajouté aux headers de l'API");
-        
-        Alert.alert("Succès", response.data.message || "Connexion réussie !");
-        router.replace("/(tabs)/accueil");
-      }
     } catch (error: any) {
       console.error("=== ERREUR DE CONNEXION ===");
       console.error("Message:", error.message);

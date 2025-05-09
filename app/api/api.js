@@ -1,9 +1,10 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
+import { API_URL } from '../../config';
 
 const api = axios.create({
-  baseURL: 'http://192.168.1.144:3333/api/v1',
+  baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
