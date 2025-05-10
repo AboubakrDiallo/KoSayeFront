@@ -1,0 +1,2 @@
+// Configuration de l'API
+export const API_URL = "http://192.168.1.144:3333/api/v1"; // URL de l'API backend
