@@ -1,25 +1,22 @@
-import React, { useState, useEffect } from "react";
+import { FILE_URL } from "@/config";
+import { Ionicons } from "@expo/vector-icons";
+import { router, useLocalSearchParams } from "expo-router";
+import * as SecureStore from "expo-secure-store";
+import React, { useEffect, useState } from "react";
 import {
-  StyleSheet,
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  Image,
-  Dimensions,
   ActivityIndicator,
-  RefreshControl,
-  TextInput,
-  ScrollView,
   Alert,
+  Dimensions,
+  Image,
   Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams, router } from "expo-router";
 import api from "./api/api";
-import * as SecureStore from "expo-secure-store";
-import { useCart } from "@/contexts/CartContext";
 
 interface Product {
   id: number;
@@ -520,7 +517,11 @@ const ProductDetail = () => {
       <ScrollView>
         <View style={styles.imageContainer}>
           <Image
-            source={{ uri: product?.image }}
+            source={{ 
+              uri: product.image ? 
+                FILE_URL + '/' + product?.image : 
+                `https://picsum.photos/seed/${product.id}/200/300` 
+            }}
             style={styles.productImage}
             resizeMode="cover"
           />
@@ -532,6 +533,7 @@ const ProductDetail = () => {
               name={isFavorite ? "heart" : "heart-outline"} 
               size={28} 
               color={isFavorite ? "#FF3B30" : "#000"} 
+
             />
           </TouchableOpacity>
       </View>

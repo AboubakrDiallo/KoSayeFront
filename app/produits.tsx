@@ -1,22 +1,23 @@
-import React, { useState, useEffect } from "react";
-import {
-  StyleSheet,
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  Image,
-  Dimensions,
-  ActivityIndicator,
-  RefreshControl,
-  TextInput,
-  ScrollView,
-  Alert,
-  Modal,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { FILE_URL } from "@/config";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  FlatList,
+  Image,
+  Modal,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import api from "./api/api";
 import { getToken, removeToken } from "./utils/auth";
 
@@ -551,7 +552,11 @@ export default function ProductsScreen() {
         }}
       >
         <Image 
-          source={{ uri: item.image || "https://placehold.co/300x300" }} 
+          source={{ 
+            uri: item.image ? 
+              FILE_URL + '/' + item?.image : 
+              `https://picsum.photos/seed/${item.id}/200/300` 
+          }} 
           style={styles.productImage} 
         />
         <View style={styles.productInfo}>

@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { getToken, setToken, removeToken } from '../utils/auth';
-import api from '../api/api';
 import { router } from 'expo-router';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import api from '../api/api';
+import { getToken, removeToken, setToken } from '../utils/auth';
 
 interface User {
   id: number;
@@ -105,7 +105,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log(JSON.stringify(userData, null, 2));
         setUser(userData);
         
-        // Attendre un court instant pour s'assurer que l'état est mis à jour
+        //  l'état est mis à jour
         await new Promise(resolve => setTimeout(resolve, 500));
         
         console.log('=== REDIRECTION VERS ACCUEIL ===');
