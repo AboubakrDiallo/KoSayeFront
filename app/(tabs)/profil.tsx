@@ -149,7 +149,7 @@ export default function ProfileScreen() {
         router.push("/detail-profil");
         break;
       case "commandes":
-        router.push("/commandes");
+        router.push("/commande");
         break;
       case "contact":
         router.push("/contact");
