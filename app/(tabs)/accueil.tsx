@@ -18,7 +18,7 @@ import { router, useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import api from "../api/api";
 import { useAuth } from "../contexts/AuthContext";
-import { getToken } from '../utils/auth';
+import { getToken } from "../utils/auth";
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = width * 0.4;
@@ -43,7 +43,13 @@ interface Product {
   description?: string;
   category: { id: string; name: string };
   propertyValues: { property_id: string; value: string }[];
-  variants: { id: string; name: string; price: number | string; stock: number; image?: string }[];
+  variants: {
+    id: string;
+    name: string;
+    price: number | string;
+    stock: number;
+    image?: string;
+  }[];
 }
 
 interface WishlistItem {
@@ -69,7 +75,15 @@ const fallbackProducts: Product[] = [
     description: "Montre élégante",
     category: { id: "1", name: "Montres" },
     propertyValues: [],
-    variants: [{ id: "1", name: "Standard", price: 40, stock: 10, image: "https://images.unsplash.com/photo-1523170335258-f5ed11844a49" }],
+    variants: [
+      {
+        id: "1",
+        name: "Standard",
+        price: 40,
+        stock: 10,
+        image: "https://images.unsplash.com/photo-1523170335258-f5ed11844a49",
+      },
+    ],
   },
   {
     id: "2",
@@ -79,7 +93,15 @@ const fallbackProducts: Product[] = [
     description: "Chaussures de sport",
     category: { id: "2", name: "Chaussures" },
     propertyValues: [],
-    variants: [{ id: "2", name: "Standard", price: 430, stock: 15, image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff" }],
+    variants: [
+      {
+        id: "2",
+        name: "Standard",
+        price: 430,
+        stock: 15,
+        image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff",
+      },
+    ],
   },
 ];
 
@@ -87,7 +109,7 @@ const fallbackProducts: Product[] = [
 
 const Header = ({ userName }: { userName: string }) => {
   const { user } = useAuth();
-  const firstLetter = user?.firstname ? user.firstname.charAt(0).toUpperCase() : '?';
+  const firstLetter = user?.firstname?.charAt(0).toUpperCase() || "?";
   const router = useRouter();
   const [unreadNotifications, setUnreadNotifications] = useState(0);
 
@@ -96,24 +118,27 @@ const Header = ({ userName }: { userName: string }) => {
       const token = await getToken();
       if (!token) return;
 
-      console.log('Fetching unread notifications...');
-      const response = await api.get('/notifications/unread/count', {
+      console.log("Fetching unread notifications...");
+      const response = await api.get("/notifications/unread/count", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
 
-      console.log('Notifications response:', response.data);
-      
-      if (response.data && typeof response.data.count === 'number') {
-        console.log('Setting unread notifications count:', response.data.count);
+      console.log("Notifications response:", response.data);
+
+      if (response.data && typeof response.data.count === "number") {
+        console.log("Setting unread notifications count:", response.data.count);
         setUnreadNotifications(response.data.count);
       } else {
-        console.log('Invalid response format:', response.data);
+        console.log("Invalid response format:", response.data);
         setUnreadNotifications(0);
       }
     } catch (error) {
-      console.error('Erreur lors de la récupération des notifications non lues:', error);
+      console.error(
+        "Erreur lors de la récupération des notifications non lues:",
+        error
+      );
       setUnreadNotifications(0);
     }
   };
@@ -126,17 +151,14 @@ const Header = ({ userName }: { userName: string }) => {
   }, []);
 
   const handleNotificationPress = () => {
-    router.push('/notifications');
+    router.push("/notifications");
   };
 
   return (
     <View style={styles.headerContainer}>
       <View style={styles.userInfoContainer}>
         {user?.profilePicture ? (
-          <Image 
-            source={{ uri: user.profilePicture }} 
-            style={styles.avatar}
-          />
+          <Image source={{ uri: user.profilePicture }} style={styles.avatar} />
         ) : (
           <View style={styles.avatarFallback}>
             <Text style={styles.avatarText}>{firstLetter}</Text>
@@ -148,12 +170,15 @@ const Header = ({ userName }: { userName: string }) => {
         <TouchableOpacity
           style={styles.iconButton}
           onPress={() => {
-            Alert.alert("Info", "La fonctionnalité de recherche n'est pas encore disponible.");
+            Alert.alert(
+              "Info",
+              "La fonctionnalité de recherche n'est pas encore disponible."
+            );
           }}
         >
           <Ionicons name="search" size={26} color="#333" />
         </TouchableOpacity>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.iconButton}
           onPress={handleNotificationPress}
         >
@@ -161,7 +186,7 @@ const Header = ({ userName }: { userName: string }) => {
           {unreadNotifications > 0 && (
             <View style={styles.notificationBadge}>
               <Text style={styles.notificationBadgeText}>
-                {unreadNotifications > 99 ? '99+' : unreadNotifications}
+                {unreadNotifications > 99 ? "99+" : unreadNotifications}
               </Text>
             </View>
           )}
@@ -219,7 +244,7 @@ const ProductCard = ({
   <TouchableOpacity
     style={styles.cardContainer}
     onPress={() => {
-      console.log('Navigation vers detail_produit avec productId:', item.id);
+      console.log("Navigation vers detail_produit avec productId:", item.id);
       router.push({
         pathname: "/detail_produit",
         params: {
@@ -229,7 +254,9 @@ const ProductCard = ({
     }}
   >
     <Image
-      source={{ uri: item.variants[0]?.image || "https://placehold.co/300x300" }}
+      source={{
+        uri: item.variants[0]?.image || "https://placehold.co/300x300",
+      }}
       style={styles.cardImage}
       resizeMode="cover"
     />
@@ -305,27 +332,27 @@ export default function AccueilScreen() {
         firstname: data.firstname,
         lastname: data.lastname,
         phone: data.phone,
-        profilePicture: data.profilePicture || null
+        profilePicture: data.profilePicture || null,
       });
     }
   };
 
   const fetchUserData = async (token: string) => {
     try {
-      console.log('=== RÉCUPÉRATION DONNÉES UTILISATEUR ===');
-      const response = await api.get('/user/profile', {
-        headers: { Authorization: `Bearer ${token}` }
+      console.log("=== RÉCUPÉRATION DONNÉES UTILISATEUR ===");
+      const response = await api.get("/user/profile", {
+        headers: { Authorization: `Bearer ${token}` },
       });
-      console.log('=== DONNÉES UTILISATEUR RÉCUPÉRÉES ===');
-      console.log('Données:', response.data.data);
-      
+      console.log("=== DONNÉES UTILISATEUR RÉCUPÉRÉES ===");
+      console.log("Données:", response.data.data);
+
       if (response.data.data) {
         updateUserData(response.data.data);
       }
     } catch (error: any) {
-      console.error('=== ERREUR RÉCUPÉRATION DONNÉES UTILISATEUR ===');
-      console.error('Message:', error.message);
-      console.error('Réponse API:', error.response?.data);
+      console.error("=== ERREUR RÉCUPÉRATION DONNÉES UTILISATEUR ===");
+      console.error("Message:", error.message);
+      console.error("Réponse API:", error.response?.data);
     }
   };
 
@@ -339,7 +366,10 @@ export default function AccueilScreen() {
       setFavorites(wishlistItems.map((item: WishlistItem) => item.product_id));
     } catch (error: any) {
       console.error("Erreur récupération favoris :", error);
-      console.log("Détails erreur:", JSON.stringify(error.response?.data, null, 2));
+      console.log(
+        "Détails erreur:",
+        JSON.stringify(error.response?.data, null, 2)
+      );
       if (error.response?.status === 403 || error.response?.status === 401) {
         Alert.alert(
           "Erreur d'authentification",
@@ -358,26 +388,40 @@ export default function AccueilScreen() {
   const toggleFavorite = async (productId: string) => {
     const token = await getToken();
     if (!token) {
-      Alert.alert("Erreur", "Vous devez être connecté pour ajouter aux favoris.");
+      Alert.alert(
+        "Erreur",
+        "Vous devez être connecté pour ajouter aux favoris."
+      );
       router.push("/connexion");
       return;
     }
-  
+
     const isFavorite = favorites.includes(productId);
     const previousFavorites = [...favorites];
-  
+
     try {
-      console.log("Accueil.tsx - toggleFavorite - productId :", productId, "isFavorite :", isFavorite);
+      console.log(
+        "Accueil.tsx - toggleFavorite - productId :",
+        productId,
+        "isFavorite :",
+        isFavorite
+      );
       if (isFavorite) {
         const response = await api.get("/wishlist", {
           headers: { Authorization: `Bearer ${token}` },
         });
-        console.log("Accueil.tsx - Réponse GET /wishlist pour suppression :", JSON.stringify(response.data, null, 2));
+        console.log(
+          "Accueil.tsx - Réponse GET /wishlist pour suppression :",
+          JSON.stringify(response.data, null, 2)
+        );
         const wishlistItem = response.data.data.find(
           (item: WishlistItem) => item.product_id === productId
         );
         if (wishlistItem) {
-          console.log("Accueil.tsx - Suppression wishlistItemId :", wishlistItem.id);
+          console.log(
+            "Accueil.tsx - Suppression wishlistItemId :",
+            wishlistItem.id
+          );
           await api.delete(`/wishlist/${wishlistItem.id}`, {
             headers: { Authorization: `Bearer ${token}` },
           });
@@ -399,8 +443,12 @@ export default function AccueilScreen() {
       console.log("Accueil.tsx - Favorites après mise à jour :", favorites);
     } catch (error: any) {
       console.error("Accueil.tsx - Erreur modification favoris :", error);
-      console.log("Accueil.tsx - Détails erreur :", JSON.stringify(error.response?.data, null, 2));
-      let errorMessage = "Impossible de modifier les favoris. Veuillez réessayer.";
+      console.log(
+        "Accueil.tsx - Détails erreur :",
+        JSON.stringify(error.response?.data, null, 2)
+      );
+      let errorMessage =
+        "Impossible de modifier les favoris. Veuillez réessayer.";
       if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       }
@@ -413,11 +461,11 @@ export default function AccueilScreen() {
     try {
       const token = await getToken();
       if (!token) {
-        router.push('/connexion');
+        router.push("/connexion");
         return;
       }
 
-      const response = await api.get('/orders', {
+      const response = await api.get("/orders", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -427,7 +475,7 @@ export default function AccueilScreen() {
         setOrders(response.data.data);
       }
     } catch (error) {
-      console.error('Erreur lors de la récupération des commandes:', error);
+      console.error("Erreur lors de la récupération des commandes:", error);
     } finally {
       setIsLoading(false);
     }
@@ -451,39 +499,68 @@ export default function AccueilScreen() {
 
         try {
           const categoriesResponse = await api.get("/categories");
-          console.log("Réponse catégories :", JSON.stringify(categoriesResponse.data, null, 2));
+          console.log(
+            "Réponse catégories :",
+            JSON.stringify(categoriesResponse.data, null, 2)
+          );
           const fetchedCategories = categoriesResponse.data.data?.data || [];
-          setCategories(fetchedCategories.length > 0 ? fetchedCategories : fallbackCategories);
+          setCategories(
+            fetchedCategories.length > 0
+              ? fetchedCategories
+              : fallbackCategories
+          );
         } catch (error: any) {
           console.error("Erreur récupération catégories :", error);
-          console.log("Détails erreur:", JSON.stringify(error.response?.data, null, 2));
+          console.log(
+            "Détails erreur:",
+            JSON.stringify(error.response?.data, null, 2)
+          );
           setCategories(fallbackCategories);
         }
 
         try {
           const featuredResponse = await api.get("/products?page=1&limit=5");
-          console.log("Réponse produits en vedette :", JSON.stringify(featuredResponse.data, null, 2));
+          console.log(
+            "Réponse produits en vedette :",
+            JSON.stringify(featuredResponse.data, null, 2)
+          );
           const fetchedFeatured = featuredResponse.data.data?.data || [];
-          setFeaturedProducts(fetchedFeatured.length > 0 ? fetchedFeatured : fallbackProducts);
+          setFeaturedProducts(
+            fetchedFeatured.length > 0 ? fetchedFeatured : fallbackProducts
+          );
         } catch (error: any) {
           console.error("Erreur récupération produits en vedette :", error);
-          console.log("Détails erreur:", JSON.stringify(error.response?.data, null, 2));
+          console.log(
+            "Détails erreur:",
+            JSON.stringify(error.response?.data, null, 2)
+          );
           setFeaturedProducts(fallbackProducts);
         }
 
         try {
           const popularResponse = await api.get("/products?page=2&limit=5");
-          console.log("Réponse produits populaires :", JSON.stringify(popularResponse.data, null, 2));
+          console.log(
+            "Réponse produits populaires :",
+            JSON.stringify(popularResponse.data, null, 2)
+          );
           const fetchedPopular = popularResponse.data.data?.data || [];
-          setPopularProducts(fetchedPopular.length > 0 ? fetchedPopular : fallbackProducts);
+          setPopularProducts(
+            fetchedPopular.length > 0 ? fetchedPopular : fallbackProducts
+          );
         } catch (error: any) {
           console.error("Erreur récupération produits populaires :", error);
-          console.log("Détails erreur:", JSON.stringify(error.response?.data, null, 2));
+          console.log(
+            "Détails erreur:",
+            JSON.stringify(error.response?.data, null, 2)
+          );
           setPopularProducts(fallbackProducts);
         }
       } catch (error: any) {
         console.error("Erreur globale :", error);
-        console.log("Détails erreur:", JSON.stringify(error.response?.data, null, 2));
+        console.log(
+          "Détails erreur:",
+          JSON.stringify(error.response?.data, null, 2)
+        );
         setCategories(fallbackCategories);
         setFeaturedProducts(fallbackProducts);
         setPopularProducts(fallbackProducts);
@@ -506,7 +583,9 @@ export default function AccueilScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <Header userName={user ? `${user.firstname} ${user.lastname}` : "Bienvenue !"} />
+        <Header
+          userName={user ? `${user.firstname} ${user.lastname}` : "Bienvenue !"}
+        />
         <CategoryList categories={categories} />
         <Banner />
         <ProductSection
@@ -552,8 +631,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   userInfoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   avatar: {
     width: 40,
@@ -565,15 +644,15 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F59E0B',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#F59E0B",
+    justifyContent: "center",
+    alignItems: "center",
     marginRight: 10,
   },
   avatarText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   userName: {
     fontSize: 18,
@@ -697,16 +776,16 @@ const styles = StyleSheet.create({
     marginHorizontal: 10,
   },
   notificationBadge: {
-    backgroundColor: '#FF0000',
+    backgroundColor: "#FF0000",
     borderRadius: 10,
     padding: 2,
-    position: 'absolute',
+    position: "absolute",
     top: -5,
     right: -5,
   },
   notificationBadgeText: {
     fontSize: 12,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    fontWeight: "bold",
+    color: "#FFFFFF",
   },
 });

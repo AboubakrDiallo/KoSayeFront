@@ -209,28 +209,31 @@ export default function CommandeScreen() {
         onEndReached={loadMore}
         onEndReachedThreshold={0.5}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons
-              name="cart-outline"
-              size={80}
-              color="#F59E0B"
-              style={{ marginBottom: 16 }}
-            />
-            <Text style={styles.emptyTitle}>
-              Aucune commande pour l'instant
-            </Text>
-            <Text style={styles.emptyText}>
-              Vous n'avez pas encore passé de commande. Découvrez nos produits
-              et faites-vous plaisir !
-            </Text>
-            <TouchableOpacity
-              style={styles.browseButton}
-              onPress={() => router.push("/produits")}
-            >
-              <Text style={styles.browseButtonText}>
-                Découvrir les produits
+          <View style={styles.emptyWrapper}>
+            <View style={styles.emptyContainer}>
+              <Ionicons
+                name="cart-outline"
+                size={80}
+                color="#F59E0B"
+                style={{ marginBottom: 16 }}
+              />
+              <Text style={styles.emptyTitle}>
+                Aucune commande pour l'instant
               </Text>
-            </TouchableOpacity>
+              <Text style={styles.emptyText}>
+                Vous n'avez pas encore passé de commande. Découvrez nos produits
+                et faites-vous plaisir !
+              </Text>
+              <TouchableOpacity
+                style={styles.browseButton}
+                onPress={() => router.push("/produits")}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.browseButtonText}>
+                  Découvrir les produits
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         }
       />
@@ -325,49 +328,57 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#6B7280",
   },
-  emptyContainer: {
+  emptyWrapper: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingVertical: 32,
+    minHeight: 500,
+  },
+  emptyContainer: {
     backgroundColor: "#FFF8E1",
-    borderRadius: 16,
-    marginTop: 40,
-    marginHorizontal: 10,
+    borderRadius: 28,
+    paddingVertical: 36,
+    paddingHorizontal: 28,
+    alignItems: "center",
     shadowColor: "#F59E0B",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    elevation: 6,
+    minWidth: 300,
+    maxWidth: 340,
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "bold",
     color: "#F59E0B",
-    marginBottom: 8,
+    marginBottom: 10,
     textAlign: "center",
+    letterSpacing: 0.2,
   },
   emptyText: {
     fontSize: 16,
     color: "#6B7280",
-    marginBottom: 24,
+    marginBottom: 28,
     textAlign: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: 6,
+    lineHeight: 22,
   },
   browseButton: {
     backgroundColor: "#F59E0B",
-    paddingVertical: 12,
-    paddingHorizontal: 28,
-    borderRadius: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 36,
+    borderRadius: 28,
     shadowColor: "#F59E0B",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
     elevation: 2,
   },
   browseButtonText: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "bold",
+    letterSpacing: 0.3,
   },
 });

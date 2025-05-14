@@ -28,10 +28,11 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen
-        name="accueil" // Nom du fichier -> app/(tabs)/accueil.tsx
+        name="accueil"
         options={{
-          title: t("home"),
-          tabBarShowLabel: false, // Masque le texte sous l'icône
+          title: "Accueil",
+          tabBarShowLabel: true,
+          tabBarLabel: "Accueil",
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name="home"
@@ -42,10 +43,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="panier" // Nom du fichier -> app/(tabs)/panier.tsx
+        name="panier"
         options={{
           title: "Panier",
-          tabBarShowLabel: false,
+          tabBarShowLabel: true,
+          tabBarLabel: "Panier",
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name="basket"
@@ -59,7 +61,8 @@ export default function TabLayout() {
         name="chatbot"
         options={{
           title: "Chatbot",
-          tabBarShowLabel: false,
+          tabBarShowLabel: true,
+          tabBarLabel: "Chatbot",
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name="chatbubbles"
@@ -72,8 +75,9 @@ export default function TabLayout() {
       <Tabs.Screen
         name="favoris"
         options={{
-          title: t("favorites"),
-          tabBarShowLabel: false,
+          title: "Favoris",
+          tabBarShowLabel: true,
+          tabBarLabel: "Favoris",
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name="bookmark"
@@ -84,10 +88,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="profil" // Nom du fichier -> app/(tabs)/profil.tsx
+        name="profil"
         options={{
           title: "Profil",
-          tabBarShowLabel: false,
+          tabBarShowLabel: true,
+          tabBarLabel: "Profil",
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name="person-circle"

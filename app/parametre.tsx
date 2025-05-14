@@ -11,6 +11,7 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useProfile } from "../contexts/ProfileContext";
+import { useAuth } from "./contexts/AuthContext";
 
 // Définir un type pour les icônes Ionicons utilisées
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
@@ -25,6 +26,7 @@ interface SettingsItem {
 
 export default function ParametreScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const { profileImage } = useProfile();
 
   // Utiliser l'interface pour typer le tableau
@@ -108,12 +110,23 @@ export default function ParametreScreen() {
             style={styles.profileCard}
             onPress={() => handleSettingPress("compte")}
           >
-            <Image source={{ uri: profileImage }} style={styles.profileImage} />
+            {user?.profilePicture ? (
+              <Image
+                source={{ uri: user.profilePicture }}
+                style={styles.profileImage}
+              />
+            ) : (
+              <View style={styles.profileImageFallback}>
+                <Text style={styles.profileImageFallbackText}>
+                  {user?.firstname?.charAt(0).toUpperCase() || "?"}
+                </Text>
+              </View>
+            )}
             <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>Aboubacar Diallo</Text>
-              <Text style={styles.profileEmail}>
-                aladji.diallo.7509@gmail.com
+              <Text style={styles.profileName}>
+                {user?.firstname} {user?.lastname}
               </Text>
+              <Text style={styles.profileEmail}>{user?.email}</Text>
             </View>
             <Ionicons name="chevron-forward" size={24} color="#000" />
           </TouchableOpacity>
@@ -239,5 +252,18 @@ const styles = StyleSheet.create({
   settingValue: {
     fontSize: 16,
     color: "#666",
+  },
+  profileImageFallback: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: "#F59E0B",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  profileImageFallbackText: {
+    fontSize: 22,
+    color: "#FFFFFF",
+    fontWeight: "bold",
   },
 });

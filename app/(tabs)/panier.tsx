@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -10,11 +10,11 @@ import {
   StatusBar,
   Alert,
   ActivityIndicator,
-} from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import api from '../api/api';
-import { getToken } from '../utils/auth';
+} from "react-native";
+import { useRouter, useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import api from "../api/api";
+import { getToken } from "../utils/auth";
 
 interface CartItem {
   id: string;
@@ -57,12 +57,16 @@ export default function CartScreen() {
   const createNewCart = async (token: string) => {
     try {
       console.log("Création d'un nouveau panier");
-      const response = await api.post("/cart", {
-        status: "draft",
-        items: []
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await api.post(
+        "/cart",
+        {
+          status: "draft",
+          items: [],
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
       console.log("Nouveau panier créé:", response.data);
       return response.data.data;
     } catch (error: any) {
@@ -75,30 +79,37 @@ export default function CartScreen() {
     try {
       setLoading(true);
       const token = await getToken();
-      
+
       if (!token) {
         console.log("Aucun token trouvé, redirection vers la connexion");
-        Alert.alert("Erreur", "Vous devez être connecté pour voir votre panier");
+        Alert.alert(
+          "Erreur",
+          "Vous devez être connecté pour voir votre panier"
+        );
         router.push("/connexion");
         return;
       }
 
       console.log("Récupération des paniers avec le token");
-      
+
       const response = await api.get("/cart", {
-        headers: { 
+        headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+          "Content-Type": "application/json",
+        },
       });
-      
+
       console.log("Réponse de l'API pour les paniers:", response.data);
 
       if (response.data && response.data.data) {
-        const draftCart = response.data.data.find((cart: Cart) => cart.status === 'draft');
-        
+        const draftCart = response.data.data.find(
+          (cart: Cart) => cart.status === "draft"
+        );
+
         if (!draftCart) {
-          console.log("Aucun panier en brouillon trouvé, création d'un nouveau panier");
+          console.log(
+            "Aucun panier en brouillon trouvé, création d'un nouveau panier"
+          );
           const newCart = await createNewCart(token);
           setCart({
             ...newCart,
@@ -106,7 +117,7 @@ export default function CartScreen() {
             discount: 0,
             shipping_fee: 0,
             total: 0,
-            items: []
+            items: [],
           });
           return;
         }
@@ -115,13 +126,15 @@ export default function CartScreen() {
           id: draftCart.id,
           userId: draftCart.userId,
           itemsCount: draftCart.items?.length || 0,
-          status: draftCart.status
+          status: draftCart.status,
         });
 
         const processedItems = draftCart.items.map((item: CartItem) => {
           const unitPrice = Number(item.unit_price) || 0;
           const productPrice = Number(item.product.price) || 0;
-          const variantPrice = item.variant ? Number(item.variant.price) || 0 : 0;
+          const variantPrice = item.variant
+            ? Number(item.variant.price) || 0
+            : 0;
 
           const finalUnitPrice = unitPrice || variantPrice || productPrice;
 
@@ -130,16 +143,22 @@ export default function CartScreen() {
             unit_price: finalUnitPrice,
             product: {
               ...item.product,
-              price: productPrice
+              price: productPrice,
             },
-            variant: item.variant ? {
-              ...item.variant,
-              price: variantPrice
-            } : undefined
+            variant: item.variant
+              ? {
+                  ...item.variant,
+                  price: variantPrice,
+                }
+              : undefined,
           };
         });
 
-        const subtotal = processedItems.reduce((sum: number, item: { unit_price: number; quantity: number; }) => sum + (item.unit_price * item.quantity), 0);
+        const subtotal = processedItems.reduce(
+          (sum: number, item: { unit_price: number; quantity: number }) =>
+            sum + item.unit_price * item.quantity,
+          0
+        );
         const discount = Number(draftCart.discount) || 0;
         const shipping_fee = Number(draftCart.shipping_fee) || 0;
         const total = subtotal - discount + shipping_fee;
@@ -150,7 +169,7 @@ export default function CartScreen() {
           discount,
           shipping_fee,
           total,
-          items: processedItems
+          items: processedItems,
         });
       } else {
         console.log("Aucun panier trouvé, création d'un nouveau panier");
@@ -161,21 +180,23 @@ export default function CartScreen() {
           discount: 0,
           shipping_fee: 0,
           total: 0,
-          items: []
+          items: [],
         });
       }
     } catch (error: any) {
       console.error("Erreur lors de la récupération du panier:", {
         status: error.response?.status,
         message: error.response?.data?.message,
-        error: error.message
+        error: error.message,
       });
 
       if (error.response?.status === 401) {
         Alert.alert("Erreur", "Session expirée. Veuillez vous reconnecter.");
         router.push("/connexion");
       } else if (error.response?.status === 404) {
-        console.log("Aucun panier trouvé, tentative de création d'un nouveau panier");
+        console.log(
+          "Aucun panier trouvé, tentative de création d'un nouveau panier"
+        );
         try {
           const token = await getToken();
           if (token) {
@@ -186,7 +207,7 @@ export default function CartScreen() {
               discount: 0,
               shipping_fee: 0,
               total: 0,
-              items: []
+              items: [],
             });
           }
         } catch (createError) {
@@ -205,22 +226,26 @@ export default function CartScreen() {
 
   useFocusEffect(
     React.useCallback(() => {
-      console.log('CartScreen - Rechargement des données du panier');
+      console.log("CartScreen - Rechargement des données du panier");
       fetchCart();
     }, [])
   );
 
-  const checkStock = async (productId: string, variantId: string | null, quantity: number) => {
+  const checkStock = async (
+    productId: string,
+    variantId: string | null,
+    quantity: number
+  ) => {
     try {
       const token = await getToken();
       if (!token) return false;
 
       const response = await api.get(`/products/${productId}`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       const product = response.data.data;
-      
+
       if (!product) {
         console.error("Produit non trouvé");
         return false;
@@ -246,14 +271,14 @@ export default function CartScreen() {
     try {
       setProcessing(true);
       const token = await getToken();
-      
+
       if (!token) {
         Alert.alert("Erreur", "Session expirée. Veuillez vous reconnecter.");
         router.push("/connexion");
         return;
       }
 
-      const item = cart?.items.find(i => i.id === itemId);
+      const item = cart?.items.find((i) => i.id === itemId);
       if (!item) {
         console.log("Item non trouvé dans le panier:", itemId);
         return;
@@ -261,7 +286,7 @@ export default function CartScreen() {
 
       const newQuantity = increment ? item.quantity + 1 : item.quantity - 1;
       console.log("Nouvelle quantité calculée:", newQuantity);
-      
+
       if (newQuantity === 0) {
         await handleRemoveItem(itemId);
         return;
@@ -276,12 +301,14 @@ export default function CartScreen() {
       if (!hasStock) {
         Alert.alert(
           "Stock insuffisant",
-          `Désolé, il ne reste que ${item.variant?.stock || item.product.stock} unités disponibles pour ce produit.`
+          `Désolé, il ne reste que ${
+            item.variant?.stock || item.product.stock
+          } unités disponibles pour ce produit.`
         );
         return;
       }
 
-      const endpoint = increment 
+      const endpoint = increment
         ? `/cart/${cart?.id}/items/${itemId}/increment`
         : `/cart/${cart?.id}/items/${itemId}/decrement`;
 
@@ -290,12 +317,16 @@ export default function CartScreen() {
         cartId: cart?.id,
         itemId,
         currentQuantity: item.quantity,
-        newQuantity
+        newQuantity,
       });
 
-      const response = await api.patch(endpoint, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await api.patch(
+        endpoint,
+        {},
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
 
       console.log("Réponse de l'API:", response.data);
 
@@ -304,7 +335,7 @@ export default function CartScreen() {
       console.error("Erreur détaillée lors de la mise à jour de la quantité:", {
         message: error.message,
         response: error.response?.data,
-        status: error.response?.status
+        status: error.response?.status,
       });
       Alert.alert("Erreur", "Impossible de mettre à jour la quantité");
     } finally {
@@ -316,7 +347,7 @@ export default function CartScreen() {
     try {
       setProcessing(true);
       const token = await getToken();
-      
+
       if (!token) {
         Alert.alert("Erreur", "Session expirée. Veuillez vous reconnecter.");
         router.push("/connexion");
@@ -324,7 +355,7 @@ export default function CartScreen() {
       }
 
       await api.delete(`/cart/${cart?.id}/items/${itemId}`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       await fetchCart();
@@ -338,10 +369,13 @@ export default function CartScreen() {
 
   const handleCheckout = () => {
     if (!cart || cart.items.length === 0) {
-      Alert.alert("Panier vide", "Votre panier est vide. Ajoutez des articles avant de procéder au paiement.");
+      Alert.alert(
+        "Panier vide",
+        "Votre panier est vide. Ajoutez des articles avant de procéder au paiement."
+      );
       return;
     }
-    router.push('/verification');
+    router.push("/verification");
   };
 
   if (loading) {
@@ -355,14 +389,26 @@ export default function CartScreen() {
   if (!cart || cart.items.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.emptyCart}>
-          <Ionicons name="cart-outline" size={64} color="#666" />
-          <Text style={styles.emptyCartText}>Votre panier est vide</Text>
+        <View style={styles.emptyCartCard}>
+          <Ionicons
+            name="cart-outline"
+            size={90}
+            color="#F59E0B"
+            style={{ marginBottom: 20 }}
+          />
+          <Text style={styles.emptyCartTitle}>Votre panier est vide</Text>
+          <Text style={styles.emptyCartSubtitle}>
+            Il est temps de vous faire plaisir ! Découvrez nos produits et
+            ajoutez-les à votre panier.
+          </Text>
           <TouchableOpacity
-            style={styles.continueShopping}
-            onPress={() => router.push('/(tabs)/accueil')}
+            style={styles.continueShoppingBig}
+            onPress={() => router.push("/(tabs)/accueil")}
+            activeOpacity={0.85}
           >
-            <Text style={styles.continueShoppingText}>Continuer vos achats</Text>
+            <Text style={styles.continueShoppingTextBig}>
+              Découvrir la boutique
+            </Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -380,11 +426,13 @@ export default function CartScreen() {
         {cart.items.map((item) => (
           <View key={item.id} style={styles.cartItem}>
             <Image
-              source={{ uri: item.product.image || 'https://via.placeholder.com/80' }}
+              source={{
+                uri: item.product.image || "https://via.placeholder.com/80",
+              }}
               style={styles.productImage}
               onError={(e) => {
-                console.log('Erreur de chargement image:', e.nativeEvent.error);
-                item.product.image = 'https://via.placeholder.com/80';
+                console.log("Erreur de chargement image:", e.nativeEvent.error);
+                item.product.image = "https://via.placeholder.com/80";
               }}
             />
             <View style={styles.productInfo}>
@@ -393,7 +441,13 @@ export default function CartScreen() {
                 <Text style={styles.productVariant}>{item.variant.name}</Text>
               )}
               <Text style={styles.productPrice}>
-                {Number(item.unit_price || item.variant?.price || item.product.price || 0).toFixed(2)} €
+                {Number(
+                  item.unit_price ||
+                    item.variant?.price ||
+                    item.product.price ||
+                    0
+                ).toFixed(2)}{" "}
+                €
               </Text>
             </View>
             <View style={styles.rightContainer}>
@@ -412,7 +466,7 @@ export default function CartScreen() {
                   <Ionicons name="remove" size={24} color="white" />
                 </TouchableOpacity>
                 <Text style={styles.quantityText}>
-                  {item.quantity.toString().padStart(2, '0')}
+                  {item.quantity.toString().padStart(2, "0")}
                 </Text>
                 <TouchableOpacity
                   onPress={() => handleUpdateQuantity(item.id, true)}
@@ -432,29 +486,38 @@ export default function CartScreen() {
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Articles</Text>
           <Text style={styles.summaryValue}>
-            {cart.items.reduce((total, item) => total + item.quantity, 0)} articles
+            {cart.items.reduce((total, item) => total + item.quantity, 0)}{" "}
+            articles
           </Text>
         </View>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Sous-total</Text>
-          <Text style={styles.summaryValue}>{Number(cart.subtotal || 0).toFixed(2)} €</Text>
+          <Text style={styles.summaryValue}>
+            {Number(cart.subtotal || 0).toFixed(2)} €
+          </Text>
         </View>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Réduction</Text>
-          <Text style={styles.summaryValue}>{Number(cart.discount || 0).toFixed(2)} €</Text>
+          <Text style={styles.summaryValue}>
+            {Number(cart.discount || 0).toFixed(2)} €
+          </Text>
         </View>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Frais de livraison</Text>
-          <Text style={styles.summaryValue}>{Number(cart.shipping_fee || 0).toFixed(2)} €</Text>
+          <Text style={styles.summaryValue}>
+            {Number(cart.shipping_fee || 0).toFixed(2)} €
+          </Text>
         </View>
         <View style={[styles.summaryRow, styles.totalRow]}>
           <Text style={styles.totalLabel}>Total</Text>
-          <Text style={styles.totalValue}>{Number(cart.total || 0).toFixed(2)} €</Text>
+          <Text style={styles.totalValue}>
+            {Number(cart.total || 0).toFixed(2)} €
+          </Text>
         </View>
       </View>
 
-      <TouchableOpacity 
-        style={styles.checkoutButton} 
+      <TouchableOpacity
+        style={styles.checkoutButton}
         onPress={handleCheckout}
         disabled={processing}
       >
@@ -471,60 +534,82 @@ export default function CartScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#fff",
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: "#F0F0F0",
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: '600',
-    color: '#000',
+    fontWeight: "600",
+    color: "#000",
   },
-  emptyCart: {
+  emptyCartCard: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    margin: 24,
+    backgroundColor: "#FFF8E1",
+    borderRadius: 24,
+    padding: 32,
+    shadowColor: "#F59E0B",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
   },
-  emptyCartText: {
-    fontSize: 18,
-    color: '#666',
-    marginTop: 16,
-    marginBottom: 24,
+  emptyCartTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#F59E0B",
+    marginBottom: 8,
+    textAlign: "center",
   },
-  continueShopping: {
-    backgroundColor: '#F59E0B',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 25,
-  },
-  continueShoppingText: {
-    color: '#FFF',
+  emptyCartSubtitle: {
     fontSize: 16,
-    fontWeight: '600',
+    color: "#6B7280",
+    marginBottom: 28,
+    textAlign: "center",
+    paddingHorizontal: 8,
+  },
+  continueShoppingBig: {
+    backgroundColor: "#F59E0B",
+    paddingHorizontal: 36,
+    paddingVertical: 16,
+    borderRadius: 30,
+    shadowColor: "#F59E0B",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  continueShoppingTextBig: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "bold",
+    letterSpacing: 0.5,
   },
   cartList: {
     flex: 1,
   },
   cartItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     padding: 16,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: "#F5F5F5",
     marginHorizontal: 16,
     marginVertical: 8,
     borderRadius: 12,
@@ -533,7 +618,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 8,
-    backgroundColor: '#E0E0E0',
+    backgroundColor: "#E0E0E0",
   },
   productInfo: {
     flex: 1,
@@ -541,31 +626,31 @@ const styles = StyleSheet.create({
   },
   productName: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
+    fontWeight: "600",
+    color: "#000",
   },
   productVariant: {
     fontSize: 14,
-    color: '#666',
+    color: "#666",
     marginTop: 4,
   },
   productPrice: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#F59E0B',
+    fontWeight: "600",
+    color: "#F59E0B",
     marginTop: 4,
   },
   rightContainer: {
-    alignItems: 'flex-end',
+    alignItems: "flex-end",
   },
   deleteButton: {
     padding: 8,
     marginBottom: 8,
   },
   quantityContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFF",
     borderRadius: 20,
     padding: 4,
   },
@@ -573,68 +658,68 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F59E0B',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#F59E0B",
+    justifyContent: "center",
+    alignItems: "center",
   },
   quantityText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
     marginHorizontal: 12,
-    color: '#000',
+    color: "#000",
   },
   orderSummary: {
     padding: 16,
-    backgroundColor: '#FFF',
+    backgroundColor: "#FFF",
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
+    borderTopColor: "#F0F0F0",
   },
   summaryTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#000',
+    fontWeight: "600",
+    color: "#000",
     marginBottom: 16,
   },
   summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginBottom: 8,
   },
   summaryLabel: {
     fontSize: 16,
-    color: '#666',
+    color: "#666",
   },
   summaryValue: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#000',
+    fontWeight: "500",
+    color: "#000",
   },
   totalRow: {
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
+    borderTopColor: "#E0E0E0",
   },
   totalLabel: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#000',
+    fontWeight: "600",
+    color: "#000",
   },
   totalValue: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#000',
+    fontWeight: "600",
+    color: "#000",
   },
   checkoutButton: {
-    backgroundColor: '#F59E0B',
+    backgroundColor: "#F59E0B",
     margin: 16,
     padding: 16,
     borderRadius: 30,
-    alignItems: 'center',
+    alignItems: "center",
   },
   checkoutButtonText: {
-    color: '#FFF',
+    color: "#FFF",
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 });

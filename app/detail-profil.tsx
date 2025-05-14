@@ -33,7 +33,9 @@ export default function DetailProfilScreen() {
     phone: user?.phone || "",
     adress: user?.adress || "",
   });
-  const [selectedImage, setSelectedImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [selectedImage, setSelectedImage] =
+    useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [imageError, setImageError] = useState(false);
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -74,7 +76,7 @@ export default function DetailProfilScreen() {
 
       // Create FormData for multipart/form-data
       const formDataToSend = new FormData();
-      
+
       // Add profile data
       Object.entries(formData).forEach(([key, value]) => {
         formDataToSend.append(key, value);
@@ -82,40 +84,37 @@ export default function DetailProfilScreen() {
 
       // Add image if selected
       if (selectedImage) {
-        const imageUri = Platform.OS === 'ios' 
-          ? selectedImage.uri.replace('file://', '') 
-          : selectedImage.uri;
+        const imageUri =
+          Platform.OS === "ios"
+            ? selectedImage.uri.replace("file://", "")
+            : selectedImage.uri;
 
         // Créer un vrai fichier à partir de l'URI
         const response = await fetch(imageUri);
         const blob = await response.blob();
-        
+
         // Créer un fichier à partir du blob
-        const file = new File([blob], 'profile-picture.jpg', {
-          type: 'image/jpeg',
-          lastModified: new Date().getTime()
+        const file = new File([blob], "profile-picture.jpg", {
+          type: "image/jpeg",
+          lastModified: new Date().getTime(),
         });
-        
-        formDataToSend.append('profilePicture', file);
+
+        formDataToSend.append("profilePicture", file);
       }
 
-      const response = await api.put(
-        "/user/profile",
-        formDataToSend,
-        {
-          headers: { 
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'multipart/form-data',
-            'Accept': 'application/json',
-          }
-        }
-      );
+      const response = await api.put("/user/profile", formDataToSend, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+          Accept: "application/json",
+        },
+      });
 
       // Si nous avons une réponse, c'est un succès
       if (response.data) {
         // Construire l'URL complète de l'image
-        const baseUrl = 'http://192.168.1.144:3333';
-        const profilePictureUrl = response.data.data?.profilePicture 
+        const baseUrl = "http://192.168.1.144:3333";
+        const profilePictureUrl = response.data.data?.profilePicture
           ? `${baseUrl}${response.data.data.profilePicture}`
           : null;
 
@@ -123,11 +122,11 @@ export default function DetailProfilScreen() {
         const updatedUserData = {
           ...user,
           ...formData,
-          profilePicture: profilePictureUrl
+          profilePicture: profilePictureUrl,
         };
-        
+
         updateUser(updatedUserData);
-        
+
         Alert.alert("Succès", "Profil mis à jour avec succès");
         router.back();
       }
@@ -135,7 +134,8 @@ export default function DetailProfilScreen() {
       console.error("Erreur lors de la mise à jour du profil:", error);
       Alert.alert(
         "Erreur",
-        error.response?.data?.message || "Une erreur est survenue lors de la mise à jour du profil"
+        error.response?.data?.message ||
+          "Une erreur est survenue lors de la mise à jour du profil"
       );
     } finally {
       setLoading(false);
@@ -168,12 +168,16 @@ export default function DetailProfilScreen() {
       <ScrollView style={styles.content}>
         <View style={styles.profileImageContainer}>
           <TouchableOpacity onPress={pickImage}>
-            {profileImage ? (
-              <Image source={{ uri: profileImage }} style={styles.profileImage} />
+            {user?.profilePicture && !imageError ? (
+              <Image
+                source={{ uri: user.profilePicture }}
+                style={styles.profileImage}
+                onError={() => setImageError(true)}
+              />
             ) : (
               <View style={styles.profileImageFallback}>
                 <Text style={styles.profileImageFallbackText}>
-                  {user.firstname.charAt(0).toUpperCase()}
+                  {user?.firstname?.charAt(0).toUpperCase() || "?"}
                 </Text>
               </View>
             )}
@@ -240,14 +244,19 @@ export default function DetailProfilScreen() {
           </View>
 
           <TouchableOpacity
-            style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+            style={[
+              styles.submitButton,
+              loading && styles.submitButtonDisabled,
+            ]}
             onPress={handleSubmit}
             disabled={loading}
           >
             {loading ? (
               <ActivityIndicator color="#FFF" />
             ) : (
-              <Text style={styles.submitButtonText}>Enregistrer les modifications</Text>
+              <Text style={styles.submitButtonText}>
+                Enregistrer les modifications
+              </Text>
             )}
           </TouchableOpacity>
         </View>

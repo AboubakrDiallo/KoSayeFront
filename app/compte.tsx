@@ -11,10 +11,12 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useProfile } from "../contexts/ProfileContext";
+import { useAuth } from "./contexts/AuthContext";
 
 export default function CompteScreen() {
   const router = useRouter();
   const { profileImage } = useProfile();
+  const { user } = useAuth();
 
   const handleLogout = () => {
     // TODO: Implémenter la déconnexion
@@ -39,12 +41,23 @@ export default function CompteScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Profil</Text>
           <View style={styles.profileCard}>
-            <Image source={{ uri: profileImage }} style={styles.profileImage} />
+            {user?.profilePicture ? (
+              <Image
+                source={{ uri: user.profilePicture }}
+                style={styles.profileImage}
+              />
+            ) : (
+              <View style={styles.profileImageFallback}>
+                <Text style={styles.profileImageFallbackText}>
+                  {user?.firstname?.charAt(0).toUpperCase() || "?"}
+                </Text>
+              </View>
+            )}
             <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>Aboubacar Diallo</Text>
-              <Text style={styles.profileEmail}>
-                aladji.diallo.7509@gmail.com
+              <Text style={styles.profileName}>
+                {user?.firstname} {user?.lastname}
               </Text>
+              <Text style={styles.profileEmail}>{user?.email}</Text>
             </View>
           </View>
         </View>
@@ -199,5 +212,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#FF3B30",
     fontWeight: "600",
+  },
+  profileImageFallback: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: "#F59E0B",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  profileImageFallbackText: {
+    fontSize: 22,
+    color: "#FFFFFF",
+    fontWeight: "bold",
   },
 });

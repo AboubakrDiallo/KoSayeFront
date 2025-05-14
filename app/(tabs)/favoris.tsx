@@ -52,13 +52,19 @@ export default function Favoris() {
       const response = await api.get("/wishlist", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      console.log("Favoris.tsx - Réponse GET /wishlist :", JSON.stringify(response.data, null, 2));
+      console.log(
+        "Favoris.tsx - Réponse GET /wishlist :",
+        JSON.stringify(response.data, null, 2)
+      );
       const wishlistItems = response.data.data || [];
       setFavorites(wishlistItems);
       console.log("Favoris.tsx - État favorites mis à jour :", wishlistItems);
     } catch (error: any) {
       console.error("Favoris.tsx - Erreur récupération favoris :", error);
-      console.log("Favoris.tsx - Détails erreur :", JSON.stringify(error.response?.data, null, 2));
+      console.log(
+        "Favoris.tsx - Détails erreur :",
+        JSON.stringify(error.response?.data, null, 2)
+      );
       if (error.response?.status === 403 || error.response?.status === 401) {
         Alert.alert(
           "Erreur d'authentification",
@@ -96,8 +102,12 @@ export default function Favoris() {
       await fetchFavorites(token);
     } catch (error: any) {
       console.error("Favoris.tsx - Erreur suppression favori :", error);
-      console.log("Favoris.tsx - Détails erreur :", JSON.stringify(error.response?.data, null, 2));
-      let errorMessage = "Impossible de supprimer le favori. Veuillez réessayer.";
+      console.log(
+        "Favoris.tsx - Détails erreur :",
+        JSON.stringify(error.response?.data, null, 2)
+      );
+      let errorMessage =
+        "Impossible de supprimer le favori. Veuillez réessayer.";
       if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       }
@@ -127,7 +137,10 @@ export default function Favoris() {
     <TouchableOpacity
       style={styles.cardContainer}
       onPress={() => {
-        console.log("Favoris.tsx - Navigation vers detail_produit avec productId :", item.product.id);
+        console.log(
+          "Favoris.tsx - Navigation vers detail_produit avec productId :",
+          item.product.id
+        );
         router.push({
           pathname: "/detail_produit",
           params: { productId: item.product.id },
@@ -163,7 +176,23 @@ export default function Favoris() {
         </View>
       ) : favorites.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>Aucun produit dans vos favoris.</Text>
+          <Ionicons
+            name="bookmark-outline"
+            size={80}
+            color="#F59E0B"
+            style={{ marginBottom: 16 }}
+          />
+          <Text style={styles.emptyTitle}>Aucun favori pour l'instant</Text>
+          <Text style={styles.emptyText}>
+            Vous n'avez pas encore ajouté de produit à vos favoris. Explorez
+            notre catalogue et trouvez vos coups de cœur !
+          </Text>
+          <TouchableOpacity
+            style={styles.browseButton}
+            onPress={() => router.push("/produits")}
+          >
+            <Text style={styles.browseButtonText}>Découvrir les produits</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
@@ -172,6 +201,29 @@ export default function Favoris() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons
+                name="bookmark-outline"
+                size={80}
+                color="#F59E0B"
+                style={{ marginBottom: 16 }}
+              />
+              <Text style={styles.emptyTitle}>Aucun favori pour l'instant</Text>
+              <Text style={styles.emptyText}>
+                Vous n'avez pas encore ajouté de produit à vos favoris. Explorez
+                notre catalogue et trouvez vos coups de cœur !
+              </Text>
+              <TouchableOpacity
+                style={styles.browseButton}
+                onPress={() => router.push("/produits")}
+              >
+                <Text style={styles.browseButtonText}>
+                  Découvrir les produits
+                </Text>
+              </TouchableOpacity>
+            </View>
+          }
         />
       )}
     </SafeAreaView>
@@ -202,10 +254,46 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    paddingVertical: 32,
+    backgroundColor: "#FFF8E1",
+    borderRadius: 16,
+    marginTop: 40,
+    marginHorizontal: 10,
+    shadowColor: "#F59E0B",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#F59E0B",
+    marginBottom: 8,
+    textAlign: "center",
   },
   emptyText: {
     fontSize: 16,
-    color: "#666",
+    color: "#6B7280",
+    marginBottom: 24,
+    textAlign: "center",
+    paddingHorizontal: 16,
+  },
+  browseButton: {
+    backgroundColor: "#F59E0B",
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    borderRadius: 24,
+    shadowColor: "#F59E0B",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  browseButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
   },
   listContent: {
     padding: 15,

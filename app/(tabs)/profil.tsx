@@ -26,9 +26,6 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { user, logout, updateUser } = useAuth();
   const [isImageModalVisible, setIsImageModalVisible] = useState(false);
-  const [profileImage, setProfileImage] = useState(
-    user?.profilePicture || null
-  );
   const [imageError, setImageError] = useState(false);
 
   const pickImage = async () => {
@@ -195,22 +192,18 @@ export default function ProfileScreen() {
         {/* Photo de profil et informations */}
         <View style={styles.profileSection}>
           <TouchableOpacity onPress={pickImage}>
-            {user.profilePicture && !imageError ? (
+            {user?.profilePicture && !imageError ? (
               <Image
                 source={{ uri: user.profilePicture }}
                 style={styles.profileImage}
                 onError={(e) => {
-                  console.log(
-                    "Erreur de chargement de l'image:",
-                    e.nativeEvent.error
-                  );
                   setImageError(true);
                 }}
               />
             ) : (
               <View style={styles.profileImageFallback}>
                 <Text style={styles.profileImageFallbackText}>
-                  {user.firstname.charAt(0).toUpperCase()}
+                  {user?.firstname?.charAt(0).toUpperCase() || "?"}
                 </Text>
               </View>
             )}
@@ -259,9 +252,9 @@ export default function ProfileScreen() {
           >
             <Ionicons name="close" size={28} color="#FFF" />
           </TouchableOpacity>
-          {profileImage && (
+          {user?.profilePicture && (
             <Image
-              source={{ uri: profileImage }}
+              source={{ uri: user.profilePicture }}
               style={styles.fullScreenImage}
               resizeMode="contain"
             />
