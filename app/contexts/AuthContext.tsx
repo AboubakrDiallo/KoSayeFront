@@ -16,6 +16,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   register: (userData: {
@@ -27,6 +28,7 @@ interface AuthContextType {
     adress: string;
   }) => Promise<void>;
   updateUser: (userData: Partial<User>) => void;
+  checkAuth: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -34,81 +36,77 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    checkAuth();
-  }, []);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   const checkAuth = async () => {
     try {
+      console.log('=== VÉRIFICATION AUTHENTIFICATION ===');
       const token = await getToken();
-      if (token) {
-        const response = await api.get('/user/profile');
-        setUser(response.data.data);
+      
+      if (!token) {
+        console.log('Aucun token trouvé');
+        setIsAuthenticated(false);
+        setUser(null);
+        return false;
       }
+
+      // Configurer le token dans les headers de l'API
+      api.defaults.headers.common['Authorization'] = token;
+      
+      const response = await api.get('/api/v1/user/profile');
+      console.log('Profil utilisateur récupéré:', response.data);
+      
+      if (response.data.data) {
+        setUser(response.data.data);
+        setIsAuthenticated(true);
+        return true;
+      }
+      
+      return false;
     } catch (error) {
       console.error('Erreur lors de la vérification de l\'authentification:', error);
+      setIsAuthenticated(false);
+      setUser(null);
+      return false;
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    checkAuth();
+  }, []);
 
   const login = async (email: string, password: string) => {
     try {
       console.log('=== DÉBUT CONNEXION ===');
       console.log('Email de connexion:', email);
       
-      const response = await api.post('/user/login', { email, password });
+      const response = await api.post('/api/v1/user/login', { email, password });
       console.log('=== RÉPONSE CONNEXION ===');
       console.log('Message:', response.data.message);
-      console.log('Données complètes:', JSON.stringify(response.data, null, 2));
       
       if (response.data.message === "Connexion réussie") {
-        // Vérifier si le token existe dans la réponse
         if (!response.data.token?.token) {
-          console.error('Token manquant dans la réponse:', response.data);
           throw new Error('Token manquant dans la réponse du serveur');
         }
 
         const token = response.data.token.token;
-        console.log('Token reçu:', token);
-        
         await setToken(token);
-        console.log('Token sauvegardé');
         
         // Configurer le token dans les headers de l'API
         api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        console.log('Token configuré dans les headers de l\'API');
         
-        // Récupérer les données de l'utilisateur via le profil
-        console.log('=== RÉCUPÉRATION DONNÉES UTILISATEUR ===');
-        const userResponse = await api.get('/user/profile');
-        
-        console.log('=== DONNÉES UTILISATEUR RÉCUPÉRÉES ===');
-        console.log('Données complètes:', JSON.stringify(userResponse.data, null, 2));
+        const userResponse = await api.get('/api/v1/user/profile');
         
         if (!userResponse.data.data) {
           throw new Error('Données utilisateur manquantes dans la réponse');
         }
         
-        const userData = {
-          id: userResponse.data.data.id,
-          firstname: userResponse.data.data.firstname,
-          lastname: userResponse.data.data.lastname,
-          email: userResponse.data.data.email,
-          phone: userResponse.data.data.phone,
-          adress: userResponse.data.data.adress,
-          profilePicture: userResponse.data.data.profilePicture
-        };
-        
-        console.log('=== DONNÉES UTILISATEUR FINALES ===');
-        console.log(JSON.stringify(userData, null, 2));
+        const userData = userResponse.data.data;
         setUser(userData);
+        setIsAuthenticated(true);
         
-        //  l'état est mis à jour
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        console.log('=== REDIRECTION VERS ACCUEIL ===');
         router.push('/(tabs)/accueil');
         return;
       }
@@ -118,7 +116,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('=== ERREUR DE CONNEXION ===');
       console.error('Message:', error.message);
       console.error('Réponse API:', error.response?.data);
-      console.error('Stack:', error.stack);
       throw new Error(error.response?.data?.message || 'Une erreur est survenue lors de la connexion');
     }
   };
@@ -127,6 +124,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await removeToken();
       setUser(null);
+      setIsAuthenticated(false);
+      delete api.defaults.headers.common['Authorization'];
     } catch (error) {
       console.error('Erreur lors de la déconnexion:', error);
       throw error;
@@ -252,7 +251,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, register, updateUser }}>
+    <AuthContext.Provider 
+      value={{ 
+        user, 
+        loading, 
+        isAuthenticated,
+        login, 
+        logout, 
+        register, 
+        updateUser,
+        checkAuth 
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
