@@ -81,6 +81,7 @@ export default function CommandeScreen() {
       return true;
     } catch (error) {
       console.error('CommandeScreen - Erreur vérification auth:', error);
+      router.push("/connexion");
       return false;
     }
   };
@@ -99,14 +100,15 @@ export default function CommandeScreen() {
       }
 
       console.log('CommandeScreen - Récupération des commandes');
-      const response = await api.get(`/api/v1/orders?page=${pageNum}&limit=10`, {
+      const response = await api.get(`/orders?page=${pageNum}&limit=10`, {
         headers: {
-          Authorization: token,
+          Authorization: `Bearer ${token}`,
         },
       });
 
-      console.log('CommandeScreen - Commandes récupérées');
-      const newOrders = response.data.data.data;
+      console.log('CommandeScreen - Commandes récupérées:', response.data);
+      // Ensure we have an array of orders
+      const newOrders = Array.isArray(response.data.data?.data) ? response.data.data.data : [];
       setHasMore(newOrders.length === 10);
 
       if (shouldRefresh) {
@@ -347,7 +349,7 @@ export default function CommandeScreen() {
           )}
         </View>
         <View style={styles.priceContainer}>
-          <Text style={styles.orderTotal}>{item.totalAmount.toFixed(2)} €</Text>
+          <Text style={styles.orderTotal}>{parseFloat(item.totalAmount.toString()).toFixed(2)} €</Text>
           <Text style={[styles.paymentStatus, { color: item.paymentStatus === "paid" ? "#10B981" : "#EF4444" }]}>
             {getPaymentStatusText(item.paymentStatus)}
           </Text>
@@ -373,11 +375,11 @@ export default function CommandeScreen() {
       <View style={styles.orderFooter}>
         <View style={styles.addressContainer}>
           <Text style={styles.addressText}>
-            Livraison à {item.shippingAddress.recipientName}
+            Livraison à {item.shippingAddress?.recipientName || 'Non spécifié'}
           </Text>
           <Text style={styles.addressDetails}>
-            {item.shippingAddress.city}
-            {item.shippingAddress.phone && ` • ${item.shippingAddress.phone}`}
+            {item.shippingAddress?.city || 'Adresse non spécifiée'}
+            {item.shippingAddress?.phone && ` • ${item.shippingAddress.phone}`}
           </Text>
         </View>
         <Ionicons name="chevron-forward" size={20} color="#6B7280" />
