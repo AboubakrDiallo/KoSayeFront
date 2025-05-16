@@ -109,12 +109,28 @@ export default function CommandeScreen() {
       console.log('CommandeScreen - Commandes récupérées:', response.data);
       // Ensure we have an array of orders
       const newOrders = Array.isArray(response.data.data?.data) ? response.data.data.data : [];
+      
+      // Trier les commandes par date (les plus récentes en premier)
+      const sortedOrders = newOrders.sort((a: Order, b: Order) => {
+        const dateA = new Date(a.createdAt).getTime();
+        const dateB = new Date(b.createdAt).getTime();
+        return dateB - dateA;
+      });
+
       setHasMore(newOrders.length === 10);
 
       if (shouldRefresh) {
-        setOrders(newOrders);
+        setOrders(sortedOrders);
       } else {
-        setOrders((prev) => [...prev, ...newOrders]);
+        setOrders((prev) => {
+          // Fusionner les anciennes et nouvelles commandes et les trier
+          const allOrders = [...prev, ...sortedOrders];
+          return allOrders.sort((a: Order, b: Order) => {
+            const dateA = new Date(a.createdAt).getTime();
+            const dateB = new Date(b.createdAt).getTime();
+            return dateB - dateA;
+          });
+        });
       }
     } catch (error: any) {
       console.error('CommandeScreen - Erreur fetchOrders:', error);
